@@ -1,34 +1,30 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   GameRuleError,
   isValidRoomCode,
   normalizeRoomCode,
+  submitEntry as validateDomainSubmission,
   validatePlayerName,
+  type DrawingAsset,
 } from "@/domain/game";
-import { gameRepository } from "@/repositories";
-import { PlayerNameTakenError, RoomNotFoundError } from "@/repositories/game-repository";
+import { decodePngDataUrl } from "@/lib/png-data-url";
+import {
+  ensureAnonymousUserId,
+  getAuthenticatedUserId,
+} from "@/lib/supabase/auth";
+import { drawingAssetStore, gameRepository } from "@/repositories";
+import {
+  ConcurrentGameUpdateError,
+  PlayerNameTakenError,
+  RoomNotFoundError,
+  UnauthorizedGameActionError,
+} from "@/repositories/game-repository";
 
 export interface FormState {
   error?: string;
-}
-
-async function rememberPlayer(code: string, playerId: string): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set(`room-${code}`, playerId, {
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 60 * 60 * 24,
-    path: "/",
-  });
-}
-
-async function currentPlayerId(code: string): Promise<string | null> {
-  const cookieStore = await cookies();
-  return cookieStore.get(`room-${code}`)?.value ?? null;
 }
 
 function expectedErrorMessage(error: unknown): string | null {
@@ -38,10 +34,16 @@ function expectedErrorMessage(error: unknown): string | null {
     GameRuleError.name,
     RoomNotFoundError.name,
     PlayerNameTakenError.name,
+    UnauthorizedGameActionError.name,
+    ConcurrentGameUpdateError.name,
   ]);
-  if (typeof candidate.name === "string" &&
-      typeof candidate.message === "string" &&
-      expectedNames.has(candidate.name)) return candidate.message;
+  if (
+    typeof candidate.name === "string" &&
+    typeof candidate.message === "string" &&
+    expectedNames.has(candidate.name)
+  ) {
+    return candidate.message;
+  }
   return null;
 }
 
@@ -53,10 +55,9 @@ export async function createGame(
   const nameError = validatePlayerName(playerName);
   if (nameError) return { error: nameError };
 
-  const room = await gameRepository.createRoom();
-  const { player } = await gameRepository.joinRoom(room.code, playerName);
-  await rememberPlayer(room.code, player.id);
-  redirect(`/${room.code}`);
+  const authUserId = await ensureAnonymousUserId();
+  const { game } = await gameRepository.createRoom(playerName, authUserId);
+  redirect(`/${game.code}`);
 }
 
 export async function joinGame(
@@ -71,8 +72,8 @@ export async function joinGame(
   if (nameError) return { error: nameError };
 
   try {
-    const { player } = await gameRepository.joinRoom(code, playerName);
-    await rememberPlayer(code, player.id);
+    const authUserId = await ensureAnonymousUserId();
+    await gameRepository.joinRoom(code, playerName, authUserId);
   } catch (error) {
     const message = expectedErrorMessage(error);
     if (message) return { error: message };
@@ -87,12 +88,15 @@ export async function startRoomGame(
   formData: FormData,
 ): Promise<FormState> {
   const code = normalizeRoomCode(String(formData.get("roomCode") ?? ""));
-  const playerId = await currentPlayerId(code);
   if (!isValidRoomCode(code)) return { error: "El código de sala no es válido." };
-  if (!playerId) return { error: "No pertenecés a esta sala." };
+
+  const authUserId = await getAuthenticatedUserId();
+  if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
+  const player = await gameRepository.getPlayerForUser(code, authUserId);
+  if (!player) return { error: "No pertenecés a esta sala." };
 
   try {
-    await gameRepository.startGame(code, playerId);
+    await gameRepository.startGame(code, player.id, authUserId);
   } catch (error) {
     const message = expectedErrorMessage(error);
     if (message) return { error: message };
@@ -111,31 +115,70 @@ export async function submitTurn(
   const roundNumber = Number(formData.get("roundNumber"));
   const entryType = String(formData.get("entryType") ?? "");
   const value = String(formData.get("value") ?? "");
-  const playerId = await currentPlayerId(code);
 
   if (!isValidRoomCode(code)) return { error: "El código de sala no es válido." };
-  if (!playerId) return { error: "No pertenecés a esta sala." };
   if (!Number.isInteger(roundNumber) || roundNumber < 0) {
-    return { error: "La ronda no es válida. Actualizá la página." };
+    return { error: "La ronda no es válida. Esperá la actualización de la sala." };
   }
   if (entryType !== "text" && entryType !== "drawing") {
     return { error: "El tipo de respuesta no es válido." };
   }
 
-  const content =
-    entryType === "text"
-      ? ({ type: "text", text: value } as const)
-      : ({ type: "drawing", data: value, format: "placeholder" } as const);
+  const authUserId = await getAuthenticatedUserId();
+  if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
+  const game = await gameRepository.getRoom(code);
+  if (!game) return { error: "La sala no existe." };
+  const player = await gameRepository.getPlayerForUser(code, authUserId);
+  if (!player) return { error: "No pertenecés a esta sala." };
 
+  let storedDrawing: DrawingAsset | undefined;
   try {
-    await gameRepository.submitEntry(code, {
-      playerId,
-      roundNumber,
-      content,
-    });
+    const content =
+      entryType === "text"
+        ? ({ type: "text", text: value } as const)
+        : ({
+            type: "drawing",
+            asset: {
+              kind: "inline-data-url",
+              value,
+              mimeType: "image/png",
+            },
+          } as const);
+
+    if (entryType === "drawing") {
+      validateDomainSubmission(game, {
+        playerId: player.id,
+        roundNumber,
+        content,
+      });
+      const png = decodePngDataUrl(value);
+      storedDrawing = await drawingAssetStore.storeDrawing({
+        gameId: game.id,
+        playerId: player.id,
+        roundNumber,
+        png,
+      });
+    }
+
+    await gameRepository.submitEntry(
+      code,
+      {
+        playerId: player.id,
+        roundNumber,
+        content:
+          entryType === "drawing" && storedDrawing
+            ? { type: "drawing", asset: storedDrawing }
+            : content,
+      },
+      authUserId,
+    );
   } catch (error) {
+    if (storedDrawing) await drawingAssetStore.removeDrawing(storedDrawing);
     const message = expectedErrorMessage(error);
     if (message) return { error: message };
+    if (error instanceof Error && error.message.startsWith("El dibujo")) {
+      return { error: error.message };
+    }
     throw error;
   }
 

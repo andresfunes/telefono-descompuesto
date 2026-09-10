@@ -37,8 +37,11 @@ function contentForRound(roundNumber: number, playerId: string): EntryContent {
     ? { type: "text", text: `text-${roundNumber}-${playerId}` }
     : {
         type: "drawing",
-        data: `drawing-${roundNumber}-${playerId}`,
-        format: "placeholder",
+        asset: {
+          kind: "inline-data-url",
+          value: `drawing-${roundNumber}-${playerId}`,
+          mimeType: "image/png",
+        },
       };
 }
 
@@ -151,14 +154,20 @@ describe("round lifecycle", () => {
       submitEntry(started, {
         playerId: "p1",
         roundNumber: 1,
-        content: { type: "drawing", data: "dibujo", format: "placeholder" },
+        content: {
+          type: "drawing",
+          asset: { kind: "inline-data-url", value: "dibujo", mimeType: "image/png" },
+        },
       }),
     ).toThrowError(expect.objectContaining({ code: "WRONG_ROUND" }));
     expect(() =>
       submitEntry(started, {
         playerId: "p1",
         roundNumber: 0,
-        content: { type: "drawing", data: "dibujo", format: "placeholder" },
+        content: {
+          type: "drawing",
+          asset: { kind: "inline-data-url", value: "dibujo", mimeType: "image/png" },
+        },
       }),
     ).toThrowError(expect.objectContaining({ code: "WRONG_ENTRY_TYPE" }));
   });

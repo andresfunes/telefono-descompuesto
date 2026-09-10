@@ -1,19 +1,64 @@
-import { revealChains, type ChainEntry, type Game } from "@/domain/game";
+import Image from "next/image";
+import {
+  revealChains,
+  type ChainEntry,
+  type DrawingAsset,
+  type Game,
+} from "@/domain/game";
 
-function entryLabel(entry: ChainEntry): string {
+function DrawingReveal({
+  asset,
+  resolvedUrl,
+}: {
+  asset: DrawingAsset;
+  resolvedUrl?: string;
+}) {
+  const source = resolvedUrl ?? (asset.kind === "storage-path" ? null : asset.value);
+  return source ? (
+    <Image
+      alt="Dibujo de la cadena"
+      className="h-auto w-full rounded-xl border border-slate-200 bg-white object-contain"
+      height={720}
+      src={source}
+      unoptimized
+      width={960}
+    />
+  ) : (
+    <p className="text-sm text-slate-500">Dibujo no disponible</p>
+  );
+}
+
+function EntryContent({
+  entry,
+  drawingUrls,
+}: {
+  entry: ChainEntry;
+  drawingUrls: Record<string, string>;
+}) {
   switch (entry.content.type) {
     case "text":
-      return `“${entry.content.text}”`;
+      return <p className="text-lg font-bold">“{entry.content.text}”</p>;
     case "drawing":
-      return `🎨 ${entry.content.data}`;
+      return (
+        <DrawingReveal
+          asset={entry.content.asset}
+          resolvedUrl={drawingUrls[entry.id]}
+        />
+      );
     case "audio":
-      return `🔊 ${entry.content.storagePath}`;
+      return <p className="text-lg font-bold">🔊 {entry.content.storagePath}</p>;
     case "emoji":
-      return entry.content.emoji;
+      return <p className="text-4xl">{entry.content.emoji}</p>;
   }
 }
 
-export function RevealScreen({ game }: { game: Game }) {
+export function RevealScreen({
+  game,
+  drawingUrls,
+}: {
+  game: Game;
+  drawingUrls: Record<string, string>;
+}) {
   const playerNames = new Map(game.players.map((player) => [player.id, player.name]));
   const chains = revealChains(game);
 
@@ -39,7 +84,7 @@ export function RevealScreen({ game }: { game: Game }) {
                 <li key={entry.id}>
                   {entryIndex > 0 && <div className="mb-3 text-center text-2xl">↓</div>}
                   <div className="rounded-2xl bg-white p-4 text-center shadow-sm">
-                    <p className="text-lg font-bold">{entryLabel(entry)}</p>
+                    <EntryContent drawingUrls={drawingUrls} entry={entry} />
                     <p className="mt-1 text-sm text-slate-500">
                       {entryIndex === 0 ? "Original" : entry.content.type === "drawing" ? "Dibujo" : "Interpretación"}
                       {" por "}

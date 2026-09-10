@@ -1,11 +1,13 @@
-import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { GameRealtime } from "@/components/game-realtime";
 import { JoinGameForm } from "@/components/game-form";
 import { LobbyScreen } from "@/components/lobby-screen";
 import { PlayingScreen } from "@/components/playing-screen";
 import { RevealScreen } from "@/components/reveal-screen";
 import { isValidRoomCode, normalizeRoomCode } from "@/domain/game";
+import { resolveVisibleDrawingUrls } from "@/lib/game-view";
+import { getAuthenticatedUserId } from "@/lib/supabase/auth";
 import { gameRepository } from "@/repositories";
 
 export const dynamic = "force-dynamic";
@@ -14,12 +16,15 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
   const code = normalizeRoomCode((await params).code);
   if (!isValidRoomCode(code)) notFound();
 
-  const game = await gameRepository.getRoom(code);
+  const [game, authUserId] = await Promise.all([
+    gameRepository.getRoom(code),
+    getAuthenticatedUserId(),
+  ]);
   if (!game) notFound();
 
-  const cookieStore = await cookies();
-  const playerId = cookieStore.get(`room-${code}`)?.value;
-  const currentPlayer = game.players.find((player) => player.id === playerId);
+  const currentPlayer = authUserId
+    ? await gameRepository.getPlayerForUser(code, authUserId)
+    : null;
 
   if (!currentPlayer) {
     return (
@@ -45,6 +50,8 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
     );
   }
 
+  const drawingUrls = await resolveVisibleDrawingUrls(game, currentPlayer.id);
+
   return (
     <main className="mx-auto min-h-screen w-full max-w-2xl px-5 py-10 sm:py-16">
       <Link className="font-bold underline" href="/">← Salir</Link>
@@ -54,23 +61,30 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
             <p className="text-sm font-bold uppercase tracking-widest">Sala</p>
             <h1 className="font-mono text-5xl font-black tracking-[0.18em]">{code}</h1>
           </div>
-          <span className="rounded-full bg-[var(--mint)] px-4 py-2 text-sm font-bold">
-            {game.phase === "LOBBY"
-              ? "Esperando jugadores"
-              : game.phase === "PLAYING"
-                ? "Partida en curso"
-                : "Revelación"}
-          </span>
+          <div className="flex flex-col items-end gap-2">
+            <span className="rounded-full bg-[var(--mint)] px-4 py-2 text-sm font-bold">
+              {game.phase === "LOBBY"
+                ? "Esperando jugadores"
+                : game.phase === "PLAYING"
+                  ? "Partida en curso"
+                  : "Revelación"}
+            </span>
+            <GameRealtime gameId={game.id} />
+          </div>
         </header>
 
         {game.phase === "LOBBY" && (
           <LobbyScreen currentPlayer={currentPlayer} game={game} />
         )}
         {game.phase === "PLAYING" && (
-          <PlayingScreen currentPlayer={currentPlayer} game={game} />
+          <PlayingScreen
+            currentPlayer={currentPlayer}
+            drawingUrls={drawingUrls}
+            game={game}
+          />
         )}
         {(game.phase === "REVEAL" || game.phase === "FINISHED") && (
-          <RevealScreen game={game} />
+          <RevealScreen drawingUrls={drawingUrls} game={game} />
         )}
       </section>
     </main>

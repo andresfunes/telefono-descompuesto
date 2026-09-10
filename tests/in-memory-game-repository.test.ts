@@ -10,51 +10,79 @@ describe("InMemoryGameRepository", () => {
   });
 
   it("creates an empty lobby with a short room code", async () => {
-    const game = await repository.createRoom();
+    const { game, player } = await repository.createRoom("Ana", "auth-ana");
 
     expect(game.code).toMatch(/^[A-HJ-NP-Z2-9]{4}$/);
     expect(game.phase).toBe("LOBBY");
-    expect(game.players).toEqual([]);
+    expect(game.players).toEqual([player]);
+    expect(game.hostPlayerId).toBe(player.id);
     await expect(repository.getRoom(game.code.toLowerCase())).resolves.toEqual(game);
   });
 
   it("joins a player to an existing room", async () => {
-    const room = await repository.createRoom();
-    const result = await repository.joinRoom(room.code.toLowerCase(), "  Ana  ");
+    const { game: room, player: host } = await repository.createRoom("Host", "auth-host");
+    const result = await repository.joinRoom(room.code.toLowerCase(), "  Ana  ", "auth-ana");
 
     expect(result.player.name).toBe("Ana");
-    expect(result.game.players).toHaveLength(1);
-    expect(result.game.players[0]?.id).toBe(result.player.id);
-    expect(result.game.hostPlayerId).toBe(result.player.id);
+    expect(result.game.players).toHaveLength(2);
+    expect(result.game.hostPlayerId).toBe(host.id);
+    await expect(repository.getPlayerForUser(room.code, "auth-ana")).resolves.toEqual(
+      result.player,
+    );
   });
 
   it("rejects unknown rooms and duplicate names", async () => {
-    await expect(repository.joinRoom("ABCD", "Ana")).rejects.toBeInstanceOf(RoomNotFoundError);
+    await expect(repository.joinRoom("ABCD", "Ana", "auth-ana")).rejects.toBeInstanceOf(
+      RoomNotFoundError,
+    );
 
-    const room = await repository.createRoom();
-    await repository.joinRoom(room.code, "Ana");
-    await expect(repository.joinRoom(room.code, "ana")).rejects.toBeInstanceOf(PlayerNameTakenError);
+    const { game: room } = await repository.createRoom("Host", "auth-host");
+    await repository.joinRoom(room.code, "Ana", "auth-ana");
+    await expect(repository.joinRoom(room.code, "ana", "auth-other")).rejects.toBeInstanceOf(
+      PlayerNameTakenError,
+    );
   });
 
   it("starts and advances games through the authoritative repository", async () => {
-    const room = await repository.createRoom();
-    const ana = await repository.joinRoom(room.code, "Ana");
-    const beto = await repository.joinRoom(room.code, "Beto");
-    const started = await repository.startGame(room.code, ana.player.id);
+    const ana = await repository.createRoom("Ana", "auth-ana");
+    const room = ana.game;
+    const beto = await repository.joinRoom(room.code, "Beto", "auth-beto");
+    const started = await repository.startGame(room.code, ana.player.id, "auth-ana");
 
     expect(started.currentRound?.number).toBe(0);
-    const afterAna = await repository.submitEntry(room.code, {
-      playerId: ana.player.id,
-      roundNumber: 0,
-      content: { type: "text", text: "Una frase" },
-    });
+    const afterAna = await repository.submitEntry(
+      room.code,
+      {
+        playerId: ana.player.id,
+        roundNumber: 0,
+        content: { type: "text", text: "Una frase" },
+      },
+      "auth-ana",
+    );
     expect(afterAna.currentRound?.number).toBe(0);
 
-    const afterBeto = await repository.submitEntry(room.code, {
-      playerId: beto.player.id,
-      roundNumber: 0,
-      content: { type: "text", text: "Otra frase" },
-    });
+    const afterBeto = await repository.submitEntry(
+      room.code,
+      {
+        playerId: beto.player.id,
+        roundNumber: 0,
+        content: { type: "text", text: "Otra frase" },
+      },
+      "auth-beto",
+    );
     expect(afterBeto.currentRound?.number).toBe(1);
+  });
+
+  it("keeps membership on reload and rejects acting as another player", async () => {
+    const ana = await repository.createRoom("Ana", "auth-ana");
+    const beto = await repository.joinRoom(ana.game.code, "Beto", "auth-beto");
+
+    await expect(repository.getPlayerForUser(ana.game.code, "auth-ana")).resolves.toEqual(
+      ana.player,
+    );
+    await expect(
+      repository.startGame(ana.game.code, ana.player.id, "auth-beto"),
+    ).rejects.toMatchObject({ name: "UnauthorizedGameActionError" });
+    expect(beto.game.hostPlayerId).toBe(ana.player.id);
   });
 });

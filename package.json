@@ -13,13 +13,22 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:reset": "supabase db reset",
+    "supabase:test": "supabase test db"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.6",
+    "@supabase/supabase-js": "^2.115.0",
     "@tailwindcss/postcss": "^4.3.3",
+    "konva": "^10.3.3",
     "next": "^16.3.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-konva": "^19.2.6",
+    "server-only": "^0.0.1",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
@@ -28,6 +37,7 @@
     "@types/react-dom": "^19.2.7",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.3.4",
+    "supabase": "^2.116.0",
     "typescript": "^6.0.0",
     "vitest": "^5.0.0"
   }

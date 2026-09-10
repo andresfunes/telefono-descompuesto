@@ -1,5 +1,5 @@
 import type { Game, Player } from "@/domain/game";
-import { RefreshGameButton, StartGameForm } from "./game-controls";
+import { StartGameForm } from "./game-controls";
 
 export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer: Player }) {
   const isHost = game.hostPlayerId === currentPlayer.id;
@@ -32,7 +32,6 @@ export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer
       ) : (
         <div className="rounded-2xl bg-slate-100 p-4 text-center">
           <p className="font-bold">Esperando a que el anfitrión comience…</p>
-          <RefreshGameButton />
         </div>
       )}
 

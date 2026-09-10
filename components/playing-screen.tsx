@@ -1,29 +1,25 @@
-import {
-  previousEntryForPlayer,
-  type ChainEntry,
-  type Game,
-  type Player,
-} from "@/domain/game";
-import { RefreshGameButton, TurnForm } from "./game-controls";
+import { previousEntryForPlayer, type Game, type Player } from "@/domain/game";
+import { TurnForm } from "./game-controls";
 
-function visibleEntryValue(entry: ChainEntry | null): string {
-  if (!entry) return "";
-  switch (entry.content.type) {
-    case "text":
-      return entry.content.text;
-    case "drawing":
-      return entry.content.data;
-    case "audio":
-      return "Audio";
-    case "emoji":
-      return entry.content.emoji;
-  }
-}
-
-export function PlayingScreen({ game, currentPlayer }: { game: Game; currentPlayer: Player }) {
+export function PlayingScreen({
+  game,
+  currentPlayer,
+  drawingUrls,
+}: {
+  game: Game;
+  currentPlayer: Player;
+  drawingUrls: Record<string, string>;
+}) {
   if (!game.currentRound) return null;
 
   const round = game.currentRound;
+  const previousEntry = previousEntryForPlayer(game, currentPlayer.id);
+  const previousText = previousEntry?.content.type === "text"
+    ? previousEntry.content.text
+    : undefined;
+  const previousDrawingUrl = previousEntry?.content.type === "drawing"
+    ? drawingUrls[previousEntry.id]
+    : undefined;
   const hasSubmitted = round.submissions.some(
     (submission) => submission.playerId === currentPlayer.id,
   );
@@ -52,12 +48,12 @@ export function PlayingScreen({ game, currentPlayer }: { game: Game; currentPlay
           <p className="mt-2 text-slate-600">
             {completedCount} / {game.players.length} jugadores terminaron
           </p>
-          <RefreshGameButton />
         </div>
       ) : (
         <TurnForm
           entryType={round.expectedEntryType}
-          previousText={visibleEntryValue(previousEntryForPlayer(game, currentPlayer.id))}
+          previousDrawingUrl={previousDrawingUrl}
+          previousText={previousText}
           roomCode={game.code}
           roundNumber={round.number}
         />

@@ -25,10 +25,14 @@ export interface TextEntry extends EntryBase {
 export interface DrawingEntry extends EntryBase {
   content: {
     type: "drawing";
-    data: string;
-    format: "placeholder" | "konva-json" | "image-url";
+    asset: DrawingAsset;
   };
 }
+
+export type DrawingAsset =
+  | { kind: "inline-data-url"; value: string; mimeType: "image/png" }
+  | { kind: "remote-url"; value: string; mimeType: "image/png" }
+  | { kind: "storage-path"; value: string; mimeType: "image/png" };
 
 export interface AudioEntry extends EntryBase {
   content: { type: "audio"; storagePath: string };
@@ -60,6 +64,7 @@ export interface Round {
 }
 
 export interface Game {
+  id: string;
   code: string;
   phase: GamePhase;
   createdAt: Date;
@@ -125,8 +130,13 @@ export function generateRoomCode(random: () => number = Math.random): string {
   ).join("");
 }
 
-export function createLobbyGame(code: string, createdAt = new Date()): Game {
+export function createLobbyGame(
+  code: string,
+  createdAt = new Date(),
+  id = crypto.randomUUID(),
+): Game {
   return {
+    id,
     code: normalizeRoomCode(code),
     phase: "LOBBY",
     createdAt,
@@ -223,10 +233,13 @@ function normalizedEntryContent(content: EntryContent): EntryContent {
       return { ...content, text };
     }
     case "drawing": {
-      if (!content.data.trim()) {
+      if (!content.asset.value.trim()) {
         throw new GameRuleError("INVALID_ENTRY", "El dibujo no puede estar vacío.");
       }
-      return { ...content, data: content.data.trim() };
+      return {
+        ...content,
+        asset: { ...content.asset, value: content.asset.value.trim() },
+      };
     }
     case "audio":
       if (!content.storagePath.trim()) {

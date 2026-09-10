@@ -4,74 +4,105 @@ Juego de fiesta multijugador, mobile-first, inspirado en el clásico “teléfon
 
 ## Estado actual
 
-El repositorio contiene un primer flujo clásico jugable:
+El flujo clásico permite:
 
-- creación de salas sin registro;
-- ingreso mediante código corto y nombre;
-- lobby con anfitrión y lista de jugadores;
-- rondas alternadas de texto y dibujo;
-- espera y progreso por ronda;
-- revelación cronológica de todas las cadenas;
-- validaciones de anfitrión, ronda y envíos duplicados.
+- crear y entrar a salas cortas sin registro;
+- jugar rondas alternadas de texto y dibujo;
+- dibujar con lápiz, goma, colores, grosores y deshacer/rehacer;
+- sincronizar lobby, progreso, rondas y reveal automáticamente;
+- refrescar o reconectar sin perder la partida persistida.
 
-El dibujo todavía utiliza un campo de texto temporal. Está aislado para poder reemplazarlo por un lienzo con `react-konva` sin modificar las reglas del juego.
+Los dibujos se editan como vectores con `react-konva`, se exportan a PNG y se guardan en un bucket privado. PostgreSQL conserva el estado autoritativo.
 
 ## Requisitos
 
 - Node.js 20.9 o superior
 - pnpm 11.19 o compatible
+- Docker Desktop, OrbStack u otro runtime compatible para Supabase local
 
 ## Desarrollo local
 
 ```bash
 pnpm install
+pnpm supabase:start
+```
+
+Copiá `.env.example` a `.env.local` y completá los valores de `pnpm exec supabase status`:
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+SUPABASE_SECRET_KEY=...
+```
+
+Localmente, la publishable key puede ser la clave anónima y la secret key puede ser la clave `service_role`. Nunca expongas `SUPABASE_SECRET_KEY` con el prefijo `NEXT_PUBLIC_`.
+
+```bash
+pnpm supabase:reset
 pnpm dev
 ```
 
-Abrí [http://localhost:3000](http://localhost:3000). Para simular varios jugadores, usá perfiles o navegadores separados, ya que la pertenencia a cada sala se guarda en una cookie HTTP-only.
+Abrí [http://localhost:3000](http://localhost:3000). Para simular varios jugadores, usá perfiles o contextos separados; cada uno recibe una identidad anónima.
 
 ## Comandos
 
 ```bash
-pnpm dev        # servidor de desarrollo
-pnpm lint       # reglas de ESLint y Next.js
-pnpm typecheck  # verificación estricta de TypeScript
-pnpm test       # suite de Vitest
-pnpm test:watch # tests en modo interactivo
-pnpm build      # build de producción
-pnpm start      # ejecuta el build de producción
+pnpm dev             # servidor de desarrollo
+pnpm lint            # ESLint y reglas de Next.js
+pnpm typecheck       # TypeScript estricto
+pnpm test            # suite de Vitest
+pnpm build           # build de producción
+pnpm supabase:start  # levanta Supabase local y aplica migraciones
+pnpm supabase:reset  # recrea la base local desde las migraciones
+pnpm supabase:test   # ejecuta tests pgTAP de esquema y RLS
+pnpm supabase:stop   # detiene la pila local
 ```
 
 Antes de enviar cambios, ejecutá `pnpm lint`, `pnpm typecheck`, `pnpm test` y `pnpm build`.
 
 ## Arquitectura
 
-La aplicación es un monolito Next.js con App Router:
-
 ```text
-app/            rutas, páginas y acciones de servidor
-components/     componentes de interfaz por estado del juego
-domain/         modelo y reglas puras del juego
-repositories/   interfaz de persistencia e implementación en memoria
-tests/          pruebas unitarias del dominio y repositorio
+app/                 rutas y Server Actions autoritativas
+components/          interfaz y suscripción Realtime
+components/drawing/  lienzo, controles e historial vectorial
+domain/              modelo y reglas puras del juego
+lib/supabase/        clientes de navegador, servidor y administración
+repositories/        contratos y adaptadores de PostgreSQL/Storage
+supabase/            configuración local y migraciones SQL
+tests/               pruebas del dominio, dibujo y repositorios
 ```
 
-El servidor es la autoridad para asignaciones, envíos y transiciones. Los componentes nunca avanzan una ronda por su cuenta. La capa de repositorio permite reemplazar la implementación en memoria por Supabase sin trasladar lógica de negocio a React.
+`SupabaseGameRepository` reconstruye el agregado de dominio, ejecuta las reglas TypeScript y persiste el resultado mediante compare-and-swap. `InMemoryGameRepository` permanece disponible para tests rápidos.
+
+Los clientes reciben `GAME_CHANGED` por un Broadcast privado `game:<uuid>`. El evento solo invalida la vista: `router.refresh()` vuelve a pedir el estado autoritativo y URLs firmadas para los dibujos visibles.
+
+### Seguridad y concurrencia
+
+- Las Server Actions verifican la sesión anónima y derivan el jugador desde `auth.users.id`.
+- El navegador no puede escribir tablas ni leer entregas ocultas.
+- Cadenas, entradas y dibujos completos se habilitan directamente solo durante `REVEAL`.
+- Cada mutación compara `games.version` dentro de una transacción; ante conflicto recarga, revalida y reintenta.
+- Los PNG viven en `game-drawings`; durante la partida el servidor firma únicamente el dibujo asignado.
 
 ### Rotación de cadenas
 
-Jugadores y cadenas conservan el orden de ingreso. En la ronda `r`, el jugador `i` recibe la cadena `(i - r) mod N`. Con `N` jugadores se juegan `N` rondas: cada participante contribuye exactamente una vez a cada cadena y nunca recibe inmediatamente su propio aporte anterior.
+En la ronda `r`, el jugador `i` recibe la cadena `(i - r) mod N`. Con `N` jugadores se juegan `N` rondas: cada participante contribuye exactamente una vez a cada cadena.
 
-## Limitaciones del MVP
+## Proyecto Supabase alojado
 
-- Los datos viven en memoria y se pierden al reiniciar el servidor.
-- Una instalación con múltiples procesos no comparte las salas.
-- No hay actualizaciones en tiempo real; durante la espera hay que actualizar el estado manualmente.
-- No hay autenticación ni recuperación avanzada de sesión.
-- No están integrados Supabase, LiveKit, OpenAI ni el lienzo real.
+1. Creá el proyecto y habilitá **Anonymous Sign-Ins** en Auth.
+2. Configurá la URL, publishable key y secret key en el despliegue.
+3. Ejecutá `pnpm exec supabase login` y `pnpm exec supabase link --project-ref <ref>`.
+4. Revisá con `pnpm exec supabase db push --dry-run` y aplicá con `pnpm exec supabase db push`.
 
-## Próximos pasos
+La migración crea tablas, constraints, índices, funciones, RLS, autorización Realtime y el bucket privado. No hay que crear esos recursos en el dashboard. Para producción, configurá CAPTCHA o Turnstile para limitar abuso del alta anónima.
 
-Las siguientes iteraciones previstas son el lienzo con `react-konva`, persistencia y realtime con Supabase, resultados compartibles y, más adelante, audio/video y recapitulaciones con IA.
+## Limitaciones
 
-Las pautas de arquitectura y contribución están en [AGENTS.md](./AGENTS.md).
+- La identidad se pierde al borrar los datos del navegador o cambiar de dispositivo.
+- No hay Presence ni indicadores por jugador conectado.
+- La limpieza de un PNG subido cuyo commit falla es best-effort.
+- LiveKit y OpenAI todavía no están integrados.
+
+Las pautas de contribución están en [AGENTS.md](./AGENTS.md).

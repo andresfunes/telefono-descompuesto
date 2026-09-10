@@ -1,0 +1,1 @@
+-- Intentionally empty. Multiplayer smoke tests create isolated anonymous users and rooms.
