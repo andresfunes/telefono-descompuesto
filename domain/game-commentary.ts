@@ -26,7 +26,7 @@ Escribí comentarios en español rioplatense sobre una partida de teléfono desc
 
 Tono: sarcástico, seco, ácido, ingenioso, juguetón, conciso y específico de esta partida. No tenés nombre, personaje, historia ni identidad ficticia. No hables de vos ni firmes los comentarios.
 
-Usá los nombres de los jugadores con frecuencia cuando su aporte tenga algo gracioso o notable. Cada observación debe estar respaldada por las entradas indicadas en entry_ids y por los jugadores indicados en player_ids. Podés señalar dibujos fallidos, interpretaciones absurdas, cambios dramáticos, errores evidentes, aciertos inesperados, quién rompió o rescató una cadena y patrones repetidos. Si varias personas participaron del mismo derrumbe, podés compararlas. También podés elogiar con sarcasmo.
+Usá los nombres de los jugadores con frecuencia cuando su aporte tenga algo gracioso o notable. Cada observación debe estar respaldada por todas las contribuciones relevantes indicadas en entry_ids; la aplicación deduce sus autores. Podés señalar dibujos fallidos, interpretaciones absurdas, cambios dramáticos, errores evidentes, aciertos inesperados, quién rompió o rescató una cadena y patrones repetidos. Si varias personas participaron del mismo derrumbe, incluí una entrada de cada una y podés compararlas. También podés elogiar con sarcasmo.
 
 Devolvé entre 3 y 6 comentarios breves. Evitá repetir la misma observación con palabras distintas.
 
@@ -123,8 +123,6 @@ export function validateCommentaryItems(value: unknown, game: Game): GameComment
     ),
   );
   const entryIds = new Set(playerIdByEntryId.keys());
-  const playerIds = new Set(game.players.map((player) => player.id));
-
   return comments.slice(0, 8).map((candidate) => {
     if (!candidate || typeof candidate !== "object") {
       throw new Error("La respuesta contiene un comentario inválido.");
@@ -132,24 +130,20 @@ export function validateCommentaryItems(value: unknown, game: Game): GameComment
     const row = candidate as Record<string, unknown>;
     const text = typeof row.text === "string" ? row.text.trim() : "";
     const citedEntryIds = Array.isArray(row.entry_ids)
-      ? row.entry_ids.filter((id): id is string => typeof id === "string")
-      : [];
-    const citedPlayerIds = Array.isArray(row.player_ids)
-      ? row.player_ids.filter((id): id is string => typeof id === "string")
+      ? [...new Set(row.entry_ids.filter((id): id is string => typeof id === "string"))]
       : [];
     if (
       !text ||
       text.length > 320 ||
       citedEntryIds.length === 0 ||
-      citedPlayerIds.length === 0 ||
-      citedEntryIds.some((id) => !entryIds.has(id)) ||
-      citedPlayerIds.some((id) => !playerIds.has(id)) ||
-      citedPlayerIds.some(
-        (playerId) => !citedEntryIds.some((entryId) => playerIdByEntryId.get(entryId) === playerId),
-      )
+      citedEntryIds.some((id) => !entryIds.has(id))
     ) {
       throw new Error("La respuesta contiene referencias que no pertenecen a la partida.");
     }
+    const citedPlayerIds = [
+      ...new Set(citedEntryIds.map((entryId) => playerIdByEntryId.get(entryId))),
+    ].filter((id): id is string => Boolean(id));
+
     return { text, entryIds: citedEntryIds, playerIds: citedPlayerIds };
   });
 }

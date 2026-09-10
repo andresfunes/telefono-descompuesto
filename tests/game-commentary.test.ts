@@ -82,19 +82,21 @@ describe("game commentary context", () => {
       comments: [{
         text: "Comentario inventado",
         entry_ids: ["entry-invented"],
-        player_ids: ["p1"],
       }],
     }, revealedGame())).toThrow("no pertenecen a la partida");
   });
 
-  it("rejects a player attribution unsupported by the cited entries", () => {
-    expect(() => validateCommentaryItems({
+  it("derives player attribution from the cited entries", () => {
+    expect(validateCommentaryItems({
       comments: [{
-        text: "Sofía supuestamente inició esto.",
-        entry_ids: ["entry-text"],
-        player_ids: ["p2"],
+        text: "Andrés inició esto y Sofía intentó dibujarlo.",
+        entry_ids: ["entry-text", "entry-drawing", "entry-text"],
       }],
-    }, revealedGame())).toThrow("no pertenecen a la partida");
+    }, revealedGame())).toEqual([{
+      text: "Andrés inició esto y Sofía intentó dibujarlo.",
+      entryIds: ["entry-text", "entry-drawing"],
+      playerIds: ["p1", "p2"],
+    }]);
   });
 
   it("defaults unknown intensity values and defines the safe roast boundary", () => {

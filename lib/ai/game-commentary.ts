@@ -19,28 +19,35 @@ interface CommentaryResponse {
   incomplete_details: { reason?: string } | null;
 }
 
-const commentarySchema = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    comments: {
-      type: "array",
-      minItems: 1,
-      maxItems: 8,
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          text: { type: "string", minLength: 1, maxLength: 320 },
-          entry_ids: { type: "array", minItems: 1, items: { type: "string" } },
-          player_ids: { type: "array", minItems: 1, items: { type: "string" } },
+function buildCommentarySchema(game: Game) {
+  const entryIds = game.chains.flatMap((chain) => chain.entries.map((entry) => entry.id));
+
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      comments: {
+        type: "array",
+        minItems: 1,
+        maxItems: 8,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            text: { type: "string", minLength: 1, maxLength: 320 },
+            entry_ids: {
+              type: "array",
+              minItems: 1,
+              items: { type: "string", enum: entryIds },
+            },
+          },
+          required: ["text", "entry_ids"],
         },
-        required: ["text", "entry_ids", "player_ids"],
       },
     },
-  },
-  required: ["comments"],
-} as const;
+    required: ["comments"],
+  } as const;
+}
 
 export class CommentaryConfigurationError extends Error {
   override readonly name = "CommentaryConfigurationError";
@@ -143,7 +150,7 @@ export async function generateGameCommentary(
           type: "json_schema",
           name: "game_commentary",
           strict: true,
-          schema: commentarySchema,
+          schema: buildCommentarySchema(game),
         },
       },
     });

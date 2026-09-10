@@ -31,7 +31,7 @@ const completedResponse = {
   status: "completed",
   incomplete_details: null,
   output_text: JSON.stringify({
-    comments: [{ text: "Andrés arrancó con un caballo. Prudencia inesperada.", entry_ids: ["entry-1"], player_ids: ["p1"] }],
+    comments: [{ text: "Andrés arrancó con un caballo. Prudencia inesperada.", entry_ids: ["entry-1"] }],
   }),
 };
 
