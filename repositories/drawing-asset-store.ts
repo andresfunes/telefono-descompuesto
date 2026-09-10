@@ -11,4 +11,5 @@ export interface DrawingAssetStore {
   storeDrawing(input: StoreDrawingInput): Promise<DrawingAsset>;
   removeDrawing(asset: DrawingAsset): Promise<void>;
   resolveDrawingUrl(asset: DrawingAsset): Promise<string | null>;
+  resolveDrawingAnalysisInput(asset: DrawingAsset): Promise<string | null>;
 }

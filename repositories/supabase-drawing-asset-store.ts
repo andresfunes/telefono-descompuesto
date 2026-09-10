@@ -47,4 +47,15 @@ export class SupabaseDrawingAssetStore implements DrawingAssetStore {
       .createSignedUrl(asset.value, SIGNED_URL_SECONDS);
     return error ? null : data.signedUrl;
   }
+
+  async resolveDrawingAnalysisInput(asset: DrawingAsset): Promise<string | null> {
+    if (asset.kind !== "storage-path") return asset.value;
+    const { data, error } = await createAdminClient().storage
+      .from(DRAWING_BUCKET)
+      .download(asset.value);
+    if (error) return null;
+
+    const base64 = Buffer.from(await data.arrayBuffer()).toString("base64");
+    return `data:${asset.mimeType};base64,${base64}`;
+  }
 }

@@ -10,6 +10,15 @@ import {
   validatePlayerName,
   type DrawingAsset,
 } from "@/domain/game";
+import {
+  parseHumorIntensity,
+  type GameCommentaryItem,
+} from "@/domain/game-commentary";
+import {
+  CommentaryConfigurationError,
+  generateGameCommentary,
+} from "@/lib/ai/game-commentary";
+import { resolveRevealDrawingAnalysisInputs } from "@/lib/game-view";
 import { decodePngDataUrl } from "@/lib/png-data-url";
 import {
   ensureAnonymousUserId,
@@ -25,6 +34,11 @@ import {
 
 export interface FormState {
   error?: string;
+}
+
+export interface CommentaryFormState {
+  error?: string;
+  comments?: string[];
 }
 
 function expectedErrorMessage(error: unknown): string | null {
@@ -184,4 +198,36 @@ export async function submitTurn(
 
   revalidatePath(`/${code}`);
   redirect(`/${code}`);
+}
+
+export async function generateCommentary(
+  _previousState: CommentaryFormState,
+  formData: FormData,
+): Promise<CommentaryFormState> {
+  const code = normalizeRoomCode(String(formData.get("roomCode") ?? ""));
+  if (!isValidRoomCode(code)) return { error: "El código de sala no es válido." };
+
+  const authUserId = await getAuthenticatedUserId();
+  if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
+  const game = await gameRepository.getRoom(code);
+  if (!game) return { error: "La sala no existe." };
+  const player = await gameRepository.getPlayerForUser(code, authUserId);
+  if (!player) return { error: "No pertenecés a esta sala." };
+  if (game.phase !== "REVEAL" && game.phase !== "FINISHED") {
+    return { error: "Los comentarios se habilitan cuando termina la partida." };
+  }
+
+  try {
+    const drawingUrls = await resolveRevealDrawingAnalysisInputs(game);
+    const comments: GameCommentaryItem[] = await generateGameCommentary(
+      game,
+      drawingUrls,
+      parseHumorIntensity(formData.get("intensity")),
+    );
+    return { comments: comments.map((comment) => comment.text) };
+  } catch (error) {
+    if (error instanceof CommentaryConfigurationError) return { error: error.message };
+    console.error("No se pudieron generar los comentarios de la partida", error);
+    return { error: "No pudimos generar los comentarios. Probá de nuevo en un momento." };
+  }
 }

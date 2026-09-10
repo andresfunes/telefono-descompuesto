@@ -11,6 +11,7 @@ El flujo clásico permite:
 - dibujar con lápiz, goma, colores, grosores y deshacer/rehacer;
 - sincronizar lobby, progreso, rondas y reveal automáticamente;
 - refrescar o reconectar sin perder la partida persistida.
+- generar comentarios personalizados y basados en las contribuciones al finalizar.
 
 Los dibujos se editan como vectores con `react-konva`, se exportan a PNG y se guardan en un bucket privado. PostgreSQL conserva el estado autoritativo.
 
@@ -27,15 +28,19 @@ pnpm install
 pnpm supabase:start
 ```
 
-Copiá `.env.example` a `.env.local` y completá los valores de `pnpm exec supabase status`:
+Copiá `.env.example` a `.env.local`. Completá las variables de Supabase con los valores de `pnpm exec supabase status` y agregá una API key de OpenAI para habilitar los comentarios:
 
 ```dotenv
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 SUPABASE_SECRET_KEY=...
+OPENAI_API_KEY=...
+OPENAI_COMMENTARY_MODEL=gpt-5-mini
 ```
 
 Localmente, la publishable key puede ser la clave anónima y la secret key puede ser la clave `service_role`. Nunca expongas `SUPABASE_SECRET_KEY` con el prefijo `NEXT_PUBLIC_`.
+
+`OPENAI_COMMENTARY_MODEL` es opcional y usa `gpt-5-mini` por defecto. `OPENAI_API_KEY` se utiliza solo en el servidor; no le agregues el prefijo `NEXT_PUBLIC_`.
 
 ```bash
 pnpm supabase:reset
@@ -103,6 +108,7 @@ La migración crea tablas, constraints, índices, funciones, RLS, autorización 
 - La identidad se pierde al borrar los datos del navegador o cambiar de dispositivo.
 - No hay Presence ni indicadores por jugador conectado.
 - La limpieza de un PNG subido cuyo commit falla es best-effort.
-- LiveKit y OpenAI todavía no están integrados.
+- Los comentarios de IA se generan bajo demanda y no se persisten al refrescar.
+- LiveKit todavía no está integrado.
 
 Las pautas de contribución están en [AGENTS.md](./AGENTS.md).

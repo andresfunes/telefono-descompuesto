@@ -5,6 +5,7 @@ import {
   type DrawingAsset,
   type Game,
 } from "@/domain/game";
+import { GameCommentary } from "./game-commentary";
 
 function DrawingReveal({
   asset,
@@ -69,6 +70,8 @@ export function RevealScreen({
         <h2 className="mt-3 text-3xl font-black">¡Así quedó la historia!</h2>
         <p className="mt-2 text-slate-600">De la frase original al último disparate.</p>
       </div>
+
+      <GameCommentary roomCode={game.code} />
 
       <div className="space-y-8">
         {chains.map((chain, chainIndex) => (
