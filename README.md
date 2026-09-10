@@ -10,8 +10,8 @@ El flujo clásico permite:
 - jugar rondas alternadas de texto y dibujo;
 - dibujar con lápiz, goma, colores, grosores y deshacer/rehacer;
 - sincronizar lobby, progreso, rondas y reveal automáticamente;
-- refrescar o reconectar sin perder la partida persistida.
-- generar comentarios personalizados y basados en las contribuciones al finalizar.
+- refrescar o reconectar sin perder la partida persistida;
+- generar comentarios personalizados que todos reciben y conservan al finalizar.
 
 Los dibujos se editan como vectores con `react-konva`, se exportan a PNG y se guardan en un bucket privado. PostgreSQL conserva el estado autoritativo.
 
@@ -108,7 +108,7 @@ La migración crea tablas, constraints, índices, funciones, RLS, autorización 
 - La identidad se pierde al borrar los datos del navegador o cambiar de dispositivo.
 - No hay Presence ni indicadores por jugador conectado.
 - La limpieza de un PNG subido cuyo commit falla es best-effort.
-- Los comentarios de IA se generan bajo demanda y no se persisten al refrescar.
+- Solo quien creó la partida puede generar los comentarios de IA.
 - LiveKit todavía no está integrado.
 
 Las pautas de contribución están en [AGENTS.md](./AGENTS.md).

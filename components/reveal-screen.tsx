@@ -57,10 +57,12 @@ export function RevealScreen({
   game,
   drawingUrls,
   canGenerateCommentary,
+  initialComments,
 }: {
   game: Game;
   drawingUrls: Record<string, string>;
   canGenerateCommentary: boolean;
+  initialComments: string[];
 }) {
   const playerNames = new Map(game.players.map((player) => [player.id, player.name]));
   const chains = revealChains(game);
@@ -73,7 +75,11 @@ export function RevealScreen({
         <p className="mt-2 text-slate-600">De la frase original al último disparate.</p>
       </div>
 
-      <GameCommentary canGenerate={canGenerateCommentary} roomCode={game.code} />
+      <GameCommentary
+        canGenerate={canGenerateCommentary}
+        initialComments={initialComments}
+        roomCode={game.code}
+      />
 
       <div className="space-y-8">
         {chains.map((chain, chainIndex) => (

@@ -9,7 +9,7 @@ import { isValidRoomCode, normalizeRoomCode } from "@/domain/game";
 import { canGenerateGameCommentary } from "@/domain/game-commentary";
 import { resolveVisibleDrawingUrls } from "@/lib/game-view";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
-import { gameRepository } from "@/repositories";
+import { gameCommentaryStore, gameRepository } from "@/repositories";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +52,10 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
   }
 
   const drawingUrls = await resolveVisibleDrawingUrls(game, currentPlayer.id);
+  const savedCommentary =
+    game.phase === "REVEAL" || game.phase === "FINISHED"
+      ? await gameCommentaryStore.getByRoomCode(code)
+      : null;
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-2xl px-5 py-10 sm:py-16">
@@ -87,6 +91,7 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
         {(game.phase === "REVEAL" || game.phase === "FINISHED") && (
           <RevealScreen
             canGenerateCommentary={canGenerateGameCommentary(game, currentPlayer.id)}
+            initialComments={savedCommentary?.comments ?? []}
             drawingUrls={drawingUrls}
             game={game}
           />

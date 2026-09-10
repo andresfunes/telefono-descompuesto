@@ -1,12 +1,13 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(17);
 
 select has_table('public', 'games', 'games table exists');
 select has_table('public', 'players', 'players table exists');
 select has_table('public', 'chains', 'chains table exists');
 select has_table('public', 'chain_entries', 'chain_entries table exists');
+select has_table('public', 'game_commentaries', 'game_commentaries table exists');
 select has_index('public', 'games', 'games_code_key', 'room codes are unique');
 select has_index(
   'public',
@@ -20,9 +21,10 @@ select results_eq(
       'public.games'::regclass,
       'public.players'::regclass,
       'public.chains'::regclass,
-      'public.chain_entries'::regclass
+      'public.chain_entries'::regclass,
+      'public.game_commentaries'::regclass
     ) and relrowsecurity$$,
-  array[4::bigint],
+  array[5::bigint],
   'RLS is enabled on all game tables'
 );
 
@@ -43,6 +45,27 @@ select public.join_game(
   'Beto'
 );
 
+update public.games set phase = 'REVEAL' where code = 'TST2';
+
+select throws_ok(
+  $$select public.save_game_commentary(
+    (select id from public.games where code = 'TST2'),
+    '10000000-0000-0000-0000-000000000002',
+    '["comentario"]'::jsonb,
+    'STANDARD'
+  )$$,
+  'P0001',
+  'UNAUTHORIZED_COMMENTARY_GENERATION',
+  'only the room creator can save commentary'
+);
+
+select public.save_game_commentary(
+  (select id from public.games where code = 'TST2'),
+  '10000000-0000-0000-0000-000000000001',
+  '["comentario compartido"]'::jsonb,
+  'STANDARD'
+);
+
 select ok(
   not has_function_privilege(
     'authenticated',
@@ -50,6 +73,14 @@ select ok(
     'execute'
   ),
   'authenticated clients cannot call the authoritative commit function'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.save_game_commentary(uuid,uuid,jsonb,text)',
+    'execute'
+  ),
+  'authenticated clients cannot call the commentary save function'
 );
 
 set local role authenticated;
@@ -67,6 +98,11 @@ select results_eq(
   'select count(*) from public.players',
   array[2::bigint],
   'a member can read the player list'
+);
+select results_eq(
+  'select count(*) from public.game_commentaries',
+  array[1::bigint],
+  'a member can read revealed commentary'
 );
 select results_eq(
   $$with changed as (
@@ -87,6 +123,11 @@ select results_eq(
   'select count(*) from public.games',
   array[0::bigint],
   'a non-member cannot read a room by guessing its code'
+);
+select results_eq(
+  'select count(*) from public.game_commentaries',
+  array[0::bigint],
+  'a non-member cannot read commentary'
 );
 
 select * from finish();

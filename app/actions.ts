@@ -25,7 +25,11 @@ import {
   ensureAnonymousUserId,
   getAuthenticatedUserId,
 } from "@/lib/supabase/auth";
-import { drawingAssetStore, gameRepository } from "@/repositories";
+import {
+  drawingAssetStore,
+  gameCommentaryStore,
+  gameRepository,
+} from "@/repositories";
 import {
   ConcurrentGameUpdateError,
   PlayerNameTakenError,
@@ -223,11 +227,19 @@ export async function generateCommentary(
 
   try {
     const drawingUrls = await resolveRevealDrawingAnalysisInputs(game);
+    const intensity = parseHumorIntensity(formData.get("intensity"));
     const comments: GameCommentaryItem[] = await generateGameCommentary(
       game,
       drawingUrls,
-      parseHumorIntensity(formData.get("intensity")),
+      intensity,
     );
+    await gameCommentaryStore.save({
+      gameId: game.id,
+      authUserId,
+      comments,
+      intensity,
+    });
+    revalidatePath(`/${code}`);
     return { comments: comments.map((comment) => comment.text) };
   } catch (error) {
     if (error instanceof CommentaryConfigurationError) return { error: error.message };

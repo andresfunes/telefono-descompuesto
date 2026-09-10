@@ -25,18 +25,21 @@ function GenerateButton() {
 export function GameCommentary({
   roomCode,
   canGenerate,
+  initialComments,
 }: {
   roomCode: string;
   canGenerate: boolean;
+  initialComments: string[];
 }) {
   const [state, action] = useActionState(generateCommentary, initialState);
+  const comments = state.comments ?? initialComments;
 
   return (
     <aside className="mb-8 rounded-[1.5rem] border-2 border-[var(--ink)] bg-[var(--mint)]/60 p-5">
       <h3 className="text-xl font-black">El veredicto</h3>
-      {state.comments ? (
+      {comments.length > 0 ? (
         <ul className="mt-4 space-y-3">
-          {state.comments.map((comment, index) => (
+          {comments.map((comment, index) => (
             <li className="rounded-2xl bg-white p-4 font-semibold shadow-sm" key={`${index}-${comment}`}>
               {comment}
             </li>
