@@ -70,10 +70,21 @@ describe("game start", () => {
     expect(game.currentRound).toMatchObject({ number: 0, expectedEntryType: "text" });
   });
 
-  it("rejects too few players, non-hosts, and repeated starts", () => {
+  it("rejects starting with one player", () => {
     expect(() => startGame(lobby(1), "p0")).toThrowError(
       expect.objectContaining({ code: "TOO_FEW_PLAYERS" }),
     );
+  });
+
+  it("starts successfully with two players", () => {
+    const started = startGame(lobby(2), "p0");
+
+    expect(started.phase).toBe("PLAYING");
+    expect(started.chains).toHaveLength(2);
+    expect(started.currentRound).toMatchObject({ number: 0, expectedEntryType: "text" });
+  });
+
+  it("rejects non-hosts and repeated starts", () => {
     expect(() => startGame(lobby(2), "p1")).toThrowError(
       expect.objectContaining({ code: "NOT_HOST" }),
     );

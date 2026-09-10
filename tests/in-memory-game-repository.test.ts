@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { GameRuleError } from "@/domain/game";
 import { InMemoryGameRepository } from "@/repositories/in-memory-game-repository";
 import { PlayerNameTakenError, RoomNotFoundError } from "@/repositories/game-repository";
 
@@ -43,7 +44,16 @@ describe("InMemoryGameRepository", () => {
     );
   });
 
-  it("starts and advances games through the authoritative repository", async () => {
+  it("rejects starting an authoritative game with only the host", async () => {
+    const { game, player } = await repository.createRoom("Ana", "auth-ana");
+
+    await expect(repository.startGame(game.code, player.id, "auth-ana")).rejects.toMatchObject({
+      name: GameRuleError.name,
+      code: "TOO_FEW_PLAYERS",
+    });
+  });
+
+  it("starts with two players and advances through the authoritative repository", async () => {
     const ana = await repository.createRoom("Ana", "auth-ana");
     const room = ana.game;
     const beto = await repository.joinRoom(room.code, "Beto", "auth-beto");

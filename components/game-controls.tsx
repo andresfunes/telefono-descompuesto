@@ -19,12 +19,20 @@ const DrawingCanvas = dynamic(() => import("./drawing/drawing-canvas"), {
 
 const initialState: FormState = {};
 
-function ActionButton({ idleLabel, pendingLabel }: { idleLabel: string; pendingLabel: string }) {
+function ActionButton({
+  idleLabel,
+  pendingLabel,
+  disabled = false,
+}: {
+  idleLabel: string;
+  pendingLabel: string;
+  disabled?: boolean;
+}) {
   const { pending } = useFormStatus();
   return (
     <button
       className="min-h-12 w-full rounded-2xl bg-[var(--ink)] px-5 py-3 font-black text-white shadow-[0_5px_0_#ff6b4a] transition active:translate-y-1 active:shadow-none disabled:opacity-60"
-      disabled={pending}
+      disabled={disabled || pending}
       type="submit"
     >
       {pending ? pendingLabel : idleLabel}
@@ -32,13 +40,28 @@ function ActionButton({ idleLabel, pendingLabel }: { idleLabel: string; pendingL
   );
 }
 
-export function StartGameForm({ roomCode }: { roomCode: string }) {
+export function StartGameForm({
+  roomCode,
+  hasMinimumPlayers,
+}: {
+  roomCode: string;
+  hasMinimumPlayers: boolean;
+}) {
   const [state, action] = useActionState(startRoomGame, initialState);
   return (
     <form action={action} className="space-y-3">
       <input name="roomCode" type="hidden" value={roomCode} />
+      {!hasMinimumPlayers && (
+        <p className="text-center text-sm font-semibold text-slate-600" role="status">
+          Esperando a que se una al menos 1 jugador más…
+        </p>
+      )}
       {state.error && <p className="text-center text-sm font-semibold text-red-700">{state.error}</p>}
-      <ActionButton idleLabel="Comenzar partida" pendingLabel="Comenzando…" />
+      <ActionButton
+        disabled={!hasMinimumPlayers}
+        idleLabel="Comenzar partida"
+        pendingLabel="Comenzando…"
+      />
     </form>
   );
 }

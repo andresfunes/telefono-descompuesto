@@ -1,8 +1,9 @@
-import type { Game, Player } from "@/domain/game";
+import { MINIMUM_PLAYER_COUNT, type Game, type Player } from "@/domain/game";
 import { StartGameForm } from "./game-controls";
 
 export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer: Player }) {
   const isHost = game.hostPlayerId === currentPlayer.id;
+  const hasMinimumPlayers = game.players.length >= MINIMUM_PLAYER_COUNT;
 
   return (
     <>
@@ -28,7 +29,7 @@ export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer
       </div>
 
       {isHost ? (
-        <StartGameForm roomCode={game.code} />
+        <StartGameForm hasMinimumPlayers={hasMinimumPlayers} roomCode={game.code} />
       ) : (
         <div className="rounded-2xl bg-slate-100 p-4 text-center">
           <p className="font-bold">Esperando a que el anfitrión comience…</p>
