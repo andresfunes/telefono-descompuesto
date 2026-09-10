@@ -22,7 +22,13 @@ function GenerateButton() {
   );
 }
 
-export function GameCommentary({ roomCode }: { roomCode: string }) {
+export function GameCommentary({
+  roomCode,
+  canGenerate,
+}: {
+  roomCode: string;
+  canGenerate: boolean;
+}) {
   const [state, action] = useActionState(generateCommentary, initialState);
 
   return (
@@ -36,7 +42,7 @@ export function GameCommentary({ roomCode }: { roomCode: string }) {
             </li>
           ))}
         </ul>
-      ) : (
+      ) : canGenerate ? (
         <form action={action} className="mt-4 space-y-3">
           <input name="roomCode" type="hidden" value={roomCode} />
           <label className="block text-sm font-bold" htmlFor="humor-intensity">
@@ -58,6 +64,10 @@ export function GameCommentary({ roomCode }: { roomCode: string }) {
           {state.error && <p className="text-sm font-semibold text-red-700">{state.error}</p>}
           <GenerateButton />
         </form>
+      ) : (
+        <p className="mt-3 text-sm font-semibold text-slate-600">
+          Solo quien creó la partida puede generar los comentarios.
+        </p>
       )}
     </aside>
   );

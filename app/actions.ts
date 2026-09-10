@@ -11,6 +11,7 @@ import {
   type DrawingAsset,
 } from "@/domain/game";
 import {
+  canGenerateGameCommentary,
   parseHumorIntensity,
   type GameCommentaryItem,
 } from "@/domain/game-commentary";
@@ -213,6 +214,9 @@ export async function generateCommentary(
   if (!game) return { error: "La sala no existe." };
   const player = await gameRepository.getPlayerForUser(code, authUserId);
   if (!player) return { error: "No pertenecés a esta sala." };
+  if (!canGenerateGameCommentary(game, player.id)) {
+    return { error: "Solo quien creó la partida puede generar los comentarios." };
+  }
   if (game.phase !== "REVEAL" && game.phase !== "FINISHED") {
     return { error: "Los comentarios se habilitan cuando termina la partida." };
   }

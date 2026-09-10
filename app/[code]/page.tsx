@@ -6,6 +6,7 @@ import { LobbyScreen } from "@/components/lobby-screen";
 import { PlayingScreen } from "@/components/playing-screen";
 import { RevealScreen } from "@/components/reveal-screen";
 import { isValidRoomCode, normalizeRoomCode } from "@/domain/game";
+import { canGenerateGameCommentary } from "@/domain/game-commentary";
 import { resolveVisibleDrawingUrls } from "@/lib/game-view";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
 import { gameRepository } from "@/repositories";
@@ -84,7 +85,11 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
           />
         )}
         {(game.phase === "REVEAL" || game.phase === "FINISHED") && (
-          <RevealScreen drawingUrls={drawingUrls} game={game} />
+          <RevealScreen
+            canGenerateCommentary={canGenerateGameCommentary(game, currentPlayer.id)}
+            drawingUrls={drawingUrls}
+            game={game}
+          />
         )}
       </section>
     </main>

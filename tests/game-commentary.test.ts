@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCommentaryInput,
   buildCommentaryTranscript,
+  canGenerateGameCommentary,
   GAME_COMMENTARY_INSTRUCTIONS,
   parseHumorIntensity,
   validateCommentaryItems,
@@ -49,6 +50,11 @@ function revealedGame(): Game {
 }
 
 describe("game commentary context", () => {
+  it("allows only the room creator to generate commentary", () => {
+    expect(canGenerateGameCommentary(revealedGame(), "p1")).toBe(true);
+    expect(canGenerateGameCommentary(revealedGame(), "p2")).toBe(false);
+  });
+
   it("serializes real player names, authors and contributions", () => {
     const transcript = buildCommentaryTranscript(revealedGame());
 

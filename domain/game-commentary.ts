@@ -51,6 +51,10 @@ export function parseHumorIntensity(value: unknown): HumorIntensity {
   return value === "GENTLE" || value === "STRONG" ? value : "STANDARD";
 }
 
+export function canGenerateGameCommentary(game: Game, playerId: string): boolean {
+  return game.hostPlayerId === playerId;
+}
+
 export function buildCommentaryTranscript(game: Game): string {
   const playerNames = new Map(game.players.map((player) => [player.id, player.name]));
   const chains = revealChains(game).map((chain, chainIndex) => ({
