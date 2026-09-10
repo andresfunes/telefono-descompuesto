@@ -16,7 +16,7 @@ Los dibujos se editan como vectores con `react-konva`, se exportan a PNG y se gu
 
 ## Requisitos
 
-- Node.js 20.9 o superior
+- Node.js 22 o superior (ejecutá `nvm use` para usar la versión del proyecto)
 - pnpm 11.19 o compatible
 - Docker Desktop, OrbStack u otro runtime compatible para Supabase local
 
