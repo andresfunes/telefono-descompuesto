@@ -84,6 +84,18 @@ describe("game commentary context", () => {
     }));
   });
 
+  it("makes the acidic level explicitly harsher while keeping it game-focused", () => {
+    const input = buildCommentaryInput(revealedGame(), {}, "STANDARD");
+
+    expect(input[0]).toEqual(expect.objectContaining({
+      type: "input_text",
+      text: expect.stringContaining("sé mordaz, frontal e incisivo"),
+    }));
+    expect(input[0]).toEqual(expect.objectContaining({
+      text: expect.stringContaining("nunca a la persona fuera del juego"),
+    }));
+  });
+
   it("rejects invented evidence references", () => {
     expect(() => validateCommentaryItems({
       comments: [{

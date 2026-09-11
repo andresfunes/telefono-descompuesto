@@ -42,9 +42,10 @@ Ejemplos de estilo, no hechos de esta partida:
 
 const INTENSITY_INSTRUCTIONS: Record<HumorIntensity, string> = {
   GENTLE: "Intensidad suave: priorizá ironía amable y evitá palabras fuertes.",
-  STANDARD: "Intensidad media: sé ácido y directo, sin dejar de sonar amistoso.",
+  STANDARD:
+    "Intensidad ácida: sé mordaz, frontal e incisivo con los errores de la partida. Priorizá los peores derrumbes, nombrá claramente a quien los provocó o agravó y compará sin piedad lo que recibió con lo que entregó. Usá remates secos, evitá suavizar el chiste con elogios genéricos y no expliques la broma. La agresividad debe apuntar siempre al aporte concreto, nunca a la persona fuera del juego.",
   STRONG:
-    "Intensidad máxima: permití lenguaje más filoso, pero mantené toda crítica enfocada exclusivamente en lo que ocurrió en la partida.",
+    "Intensidad máxima: aplicá todas las pautas del nivel ácido y llevá la mordacidad al límite permitido. Podés usar lenguaje más filoso y comparaciones más demoledoras, pero mantené toda crítica enfocada exclusivamente en lo que ocurrió en la partida.",
 };
 
 export function parseHumorIntensity(value: unknown): HumorIntensity {
