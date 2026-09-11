@@ -102,6 +102,64 @@ export async function joinGame(
   redirect(`/${code}`);
 }
 
+export async function createRematch(
+  _previousState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const code = normalizeRoomCode(String(formData.get("roomCode") ?? ""));
+  if (!isValidRoomCode(code)) return { error: "El código de sala no es válido." };
+
+  const authUserId = await getAuthenticatedUserId();
+  if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
+  const player = await gameRepository.getPlayerForUser(code, authUserId);
+  if (!player) return { error: "No pertenecés a esta sala." };
+
+  let rematchCode: string;
+  try {
+    const { game } = await gameRepository.createRematch(code, player.id, authUserId);
+    rematchCode = game.code;
+  } catch (error) {
+    const message = expectedErrorMessage(error);
+    if (message) return { error: message };
+    throw error;
+  }
+
+  revalidatePath(`/${code}`);
+  redirect(`/${rematchCode}`);
+}
+
+export async function joinRematch(
+  _previousState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const sourceCode = normalizeRoomCode(String(formData.get("roomCode") ?? ""));
+  if (!isValidRoomCode(sourceCode)) return { error: "El código de sala no es válido." };
+
+  const authUserId = await getAuthenticatedUserId();
+  if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
+  const [sourceGame, sourcePlayer] = await Promise.all([
+    gameRepository.getRoom(sourceCode),
+    gameRepository.getPlayerForUser(sourceCode, authUserId),
+  ]);
+  if (!sourceGame) return { error: "La sala no existe." };
+  if (!sourcePlayer) return { error: "No pertenecés a esta sala." };
+  if (!sourceGame.rematchCode) return { error: "Todavía no se creó una nueva partida." };
+
+  try {
+    await gameRepository.joinRoom(
+      sourceGame.rematchCode,
+      sourcePlayer.name,
+      authUserId,
+    );
+  } catch (error) {
+    const message = expectedErrorMessage(error);
+    if (message) return { error: message };
+    throw error;
+  }
+
+  redirect(`/${sourceGame.rematchCode}`);
+}
+
 export async function startRoomGame(
   _previousState: FormState,
   formData: FormData,

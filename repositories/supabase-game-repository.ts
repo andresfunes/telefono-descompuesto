@@ -31,6 +31,7 @@ type GameChangeKind =
 
 export interface GameSnapshotGateway {
   createGameWithHost(code: string, authUserId: string, playerName: string): Promise<void>;
+  createRematch(sourceCode: string, authUserId: string, newCode: string): Promise<string>;
   joinGame(code: string, authUserId: string, playerName: string): Promise<void>;
   loadGame(code: string): Promise<unknown | null>;
   commitGame(input: PersistedGameCommit): Promise<boolean>;
@@ -89,6 +90,10 @@ function integerField(row: Record<string, unknown>, key: string): number {
 
 function nullableIntegerField(row: Record<string, unknown>, key: string): number | null {
   return row[key] === null ? null : integerField(row, key);
+}
+
+function nullableStringField(row: Record<string, unknown>, key: string): string | null {
+  return row[key] === null ? null : stringField(row, key);
 }
 
 function rowsField(snapshot: Record<string, unknown>, key: string): Record<string, unknown>[] {
@@ -213,6 +218,7 @@ export function deserializeGameSnapshot(value: unknown): LoadedGame {
       players,
       chains,
       currentRound,
+      rematchCode: nullableStringField(gameRow, "rematch_code"),
     },
     version: integerField(gameRow, "version"),
     playerIdByAuthUserId,
@@ -309,6 +315,48 @@ export class SupabaseGameRepository implements GameRepository {
       }
     }
     throw new ConcurrentGameUpdateError("No se pudo reservar un código de sala.");
+  }
+
+  async createRematch(
+    sourceCode: string,
+    requestedByPlayerId: string,
+    authUserId: string,
+  ): Promise<{ game: Game; player: Player }> {
+    const normalizedSourceCode = normalizeRoomCode(sourceCode);
+    const source = await this.load(normalizedSourceCode);
+    if (!source) throw new RoomNotFoundError("La sala no existe.");
+    if (source.playerIdByAuthUserId.get(authUserId) !== requestedByPlayerId) {
+      throw new UnauthorizedGameActionError("No podés crear otra partida por otro jugador.");
+    }
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        const code = await this.gateway.createRematch(
+          normalizedSourceCode,
+          authUserId,
+          generateRoomCode(),
+        );
+        const loaded = await this.load(code);
+        const playerId = loaded?.playerIdByAuthUserId.get(authUserId);
+        const player = loaded?.game.players.find((candidate) => candidate.id === playerId);
+        if (!loaded || !player) throw new Error("No se pudo reconstruir la nueva sala.");
+        return { game: loaded.game, player };
+      } catch (error) {
+        if (isCodeCollision(error)) continue;
+        const message = hasMessage(error) ? error.message : "";
+        if (message.includes("NOT_HOST")) {
+          throw new GameRuleError("NOT_HOST", "Solo quien creó la sala puede crear otra partida.");
+        }
+        if (message.includes("GAME_NOT_FINISHED")) {
+          throw new GameRuleError(
+            "GAME_NOT_FINISHED",
+            "La nueva partida se puede crear cuando termina la actual.",
+          );
+        }
+        throw rpcFailure(error);
+      }
+    }
+    throw new ConcurrentGameUpdateError("No se pudo reservar un código para la nueva sala.");
   }
 
   async getRoom(code: string): Promise<Game | null> {

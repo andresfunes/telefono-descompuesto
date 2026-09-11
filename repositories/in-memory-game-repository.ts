@@ -1,4 +1,5 @@
 import {
+  addRematch,
   createLobbyGame,
   GameRuleError,
   generateRoomCode,
@@ -37,6 +38,45 @@ export class InMemoryGameRepository implements GameRepository {
     this.rooms.set(code, game);
     this.memberships.set(code, new Map([[authUserId, player.id]]));
     return structuredClone({ game, player });
+  }
+
+  async createRematch(
+    sourceCode: string,
+    requestedByPlayerId: string,
+    authUserId: string,
+  ): Promise<{ game: Game; player: Player }> {
+    const normalizedCode = normalizeRoomCode(sourceCode);
+    const sourceGame = this.rooms.get(normalizedCode);
+    if (!sourceGame) throw new RoomNotFoundError("La sala no existe.");
+    if (this.memberships.get(normalizedCode)?.get(authUserId) !== requestedByPlayerId) {
+      throw new UnauthorizedGameActionError("No podés crear otra partida por otro jugador.");
+    }
+    if (sourceGame.hostPlayerId !== requestedByPlayerId) {
+      throw new GameRuleError("NOT_HOST", "Solo quien creó la sala puede crear otra partida.");
+    }
+    if (sourceGame.phase !== "REVEAL" && sourceGame.phase !== "FINISHED") {
+      throw new GameRuleError(
+        "GAME_NOT_FINISHED",
+        "La nueva partida se puede crear cuando termina la actual.",
+      );
+    }
+
+    if (sourceGame.rematchCode) {
+      const game = this.rooms.get(sourceGame.rematchCode);
+      const player = await this.getPlayerForUser(sourceGame.rematchCode, authUserId);
+      if (!game || !player) throw new RoomNotFoundError("La nueva sala no existe.");
+      return structuredClone({ game, player });
+    }
+
+    const host = sourceGame.players.find((player) => player.id === requestedByPlayerId);
+    if (!host) throw new GameRuleError("PLAYER_NOT_FOUND", "El jugador no pertenece a la sala.");
+
+    const created = await this.createRoom(host.name, authUserId);
+    this.rooms.set(
+      normalizedCode,
+      addRematch(sourceGame, requestedByPlayerId, created.game.code),
+    );
+    return created;
   }
 
   async getRoom(code: string): Promise<Game | null> {

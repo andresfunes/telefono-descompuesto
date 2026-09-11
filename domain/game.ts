@@ -72,6 +72,7 @@ export interface Game {
   players: Player[];
   chains: Chain[];
   currentRound: Round | null;
+  rematchCode: string | null;
 }
 
 export interface SubmitEntryCommand {
@@ -86,6 +87,8 @@ export type GameRuleErrorCode =
   | "TOO_FEW_PLAYERS"
   | "GAME_ALREADY_STARTED"
   | "GAME_NOT_PLAYING"
+  | "GAME_NOT_FINISHED"
+  | "REMATCH_ALREADY_CREATED"
   | "PLAYER_NOT_FOUND"
   | "WRONG_ROUND"
   | "WRONG_ENTRY_TYPE"
@@ -144,7 +147,31 @@ export function createLobbyGame(
     players: [],
     chains: [],
     currentRound: null,
+    rematchCode: null,
   };
+}
+
+export function addRematch(
+  game: Game,
+  requestedByPlayerId: string,
+  rematchCode: string,
+): Game {
+  if (game.hostPlayerId !== requestedByPlayerId) {
+    throw new GameRuleError("NOT_HOST", "Solo quien creó la sala puede crear otra partida.");
+  }
+  if (game.phase !== "REVEAL" && game.phase !== "FINISHED") {
+    throw new GameRuleError(
+      "GAME_NOT_FINISHED",
+      "La nueva partida se puede crear cuando termina la actual.",
+    );
+  }
+  if (game.rematchCode) {
+    throw new GameRuleError("REMATCH_ALREADY_CREATED", "Ya se creó una nueva partida.");
+  }
+  if (!isValidRoomCode(rematchCode)) {
+    throw new GameRuleError("INVALID_ENTRY", "El código de la nueva sala no es válido.");
+  }
+  return { ...game, rematchCode: normalizeRoomCode(rematchCode) };
 }
 
 export function expectedEntryTypeForRound(roundNumber: number): PlayableEntryType {

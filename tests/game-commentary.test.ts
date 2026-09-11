@@ -17,6 +17,7 @@ function revealedGame(): Game {
     createdAt: new Date("2026-01-01T00:00:00Z"),
     hostPlayerId: "p1",
     currentRound: null,
+    rematchCode: null,
     players: [
       { id: "p1", name: "Andrés", joinedAt: new Date("2026-01-01T00:00:00Z") },
       { id: "p2", name: "Sofía", joinedAt: new Date("2026-01-01T00:00:01Z") },

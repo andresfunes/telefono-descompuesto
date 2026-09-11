@@ -95,4 +95,49 @@ describe("InMemoryGameRepository", () => {
     ).rejects.toMatchObject({ name: "UnauthorizedGameActionError" });
     expect(beto.game.hostPlayerId).toBe(ana.player.id);
   });
+
+  it("creates a new lobby for the host after reveal", async () => {
+    const ana = await repository.createRoom("Ana", "auth-ana");
+    const beto = await repository.joinRoom(ana.game.code, "Beto", "auth-beto");
+    await repository.startGame(ana.game.code, ana.player.id, "auth-ana");
+
+    for (const [player, auth] of [
+      [ana.player, "auth-ana"],
+      [beto.player, "auth-beto"],
+    ] as const) {
+      await repository.submitEntry(
+        ana.game.code,
+        { playerId: player.id, roundNumber: 0, content: { type: "text", text: "Frase" } },
+        auth,
+      );
+    }
+    for (const [player, auth] of [
+      [ana.player, "auth-ana"],
+      [beto.player, "auth-beto"],
+    ] as const) {
+      await repository.submitEntry(
+        ana.game.code,
+        {
+          playerId: player.id,
+          roundNumber: 1,
+          content: {
+            type: "drawing",
+            asset: { kind: "inline-data-url", value: "drawing", mimeType: "image/png" },
+          },
+        },
+        auth,
+      );
+    }
+
+    const created = await repository.createRematch(
+      ana.game.code,
+      ana.player.id,
+      "auth-ana",
+    );
+    const source = await repository.getRoom(ana.game.code);
+
+    expect(created.game).toMatchObject({ phase: "LOBBY", rematchCode: null });
+    expect(created.player.name).toBe("Ana");
+    expect(source?.rematchCode).toBe(created.game.code);
+  });
 });

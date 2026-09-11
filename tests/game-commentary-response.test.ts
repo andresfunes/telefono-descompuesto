@@ -13,6 +13,7 @@ const game: Game = {
   createdAt: new Date("2026-01-01T00:00:00Z"),
   hostPlayerId: "p1",
   currentRound: null,
+  rematchCode: null,
   players: [{ id: "p1", name: "Andrés", joinedAt: new Date("2026-01-01T00:00:00Z") }],
   chains: [{
     id: "chain-1",

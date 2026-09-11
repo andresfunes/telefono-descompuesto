@@ -30,6 +30,7 @@ function snapshotFromGame(
       current_entry_type: game.currentRound?.expectedEntryType ?? null,
       version,
       created_at: game.createdAt.toISOString(),
+      rematch_code: game.rematchCode,
     },
     players: game.players.map((player, joinOrder) => ({
       id: player.id,
@@ -48,7 +49,7 @@ function snapshotFromGame(
 }
 
 class FakeSnapshotGateway implements GameSnapshotGateway {
-  private snapshot: ReturnType<typeof snapshotFromGame> | null = null;
+  private readonly snapshots = new Map<string, ReturnType<typeof snapshotFromGame>>();
   private readonly identities = new Map<string, string>();
   successfulCommits = 0;
 
@@ -58,9 +59,10 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
     playerName: string,
   ): Promise<void> {
     const now = new Date(0);
-    const playerId = "player-host";
+    const roomNumber = this.snapshots.size + 1;
+    const playerId = roomNumber === 1 ? "player-host" : `player-host-${roomNumber}`;
     const game: Game = {
-      id: "game-1",
+      id: `game-${roomNumber}`,
       code,
       phase: "LOBBY",
       createdAt: now,
@@ -68,9 +70,30 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
       players: [{ id: playerId, name: playerName, joinedAt: now }],
       chains: [],
       currentRound: null,
+      rematchCode: null,
     };
     this.identities.set(playerId, authUserId);
-    this.snapshot = snapshotFromGame(game, 0, this.identities);
+    this.snapshots.set(code, snapshotFromGame(game, 0, this.identities));
+  }
+
+  async createRematch(
+    sourceCode: string,
+    authUserId: string,
+    newCode: string,
+  ): Promise<string> {
+    const source = this.snapshots.get(sourceCode);
+    if (!source) throw { message: "ROOM_NOT_FOUND" };
+    const host = source.players.find((player) => player.id === source.game.host_player_id);
+    if (host?.auth_user_id !== authUserId) throw { message: "NOT_HOST" };
+    if (source.game.phase !== "REVEAL" && source.game.phase !== "FINISHED") {
+      throw { message: "GAME_NOT_FINISHED" };
+    }
+    if (source.game.rematch_code) return source.game.rematch_code;
+
+    await this.createGameWithHost(newCode, authUserId, host.name);
+    source.game.rematch_code = newCode;
+    source.game.version += 1;
+    return newCode;
   }
 
   async joinGame(
@@ -78,16 +101,17 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
     authUserId: string,
     playerName: string,
   ): Promise<void> {
-    if (!this.snapshot || this.snapshot.game.code !== code) {
+    const snapshot = this.snapshots.get(code);
+    if (!snapshot) {
       throw { message: "ROOM_NOT_FOUND" };
     }
-    const existing = this.snapshot.players.find(
+    const existing = snapshot.players.find(
       (player) => player.auth_user_id === authUserId,
     );
     if (existing) return;
-    if (this.snapshot.game.phase !== "LOBBY") throw { message: "GAME_ALREADY_STARTED" };
+    if (snapshot.game.phase !== "LOBBY") throw { message: "GAME_ALREADY_STARTED" };
     if (
-      this.snapshot.players.some(
+      snapshot.players.some(
         (player) => player.name.toLocaleLowerCase() === playerName.toLocaleLowerCase(),
       )
     ) {
@@ -95,34 +119,38 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
     }
 
     const player: TestPlayer = {
-      id: `player-${this.snapshot.players.length}`,
+      id: `player-${snapshot.players.length}`,
       authUserId,
       name: playerName,
-      joinedAt: new Date(this.snapshot.players.length).toISOString(),
+      joinedAt: new Date(snapshot.players.length).toISOString(),
     };
     this.identities.set(player.id, player.authUserId);
-    this.snapshot.players.push({
+    snapshot.players.push({
       id: player.id,
       auth_user_id: player.authUserId,
       name: player.name,
-      join_order: this.snapshot.players.length,
+      join_order: snapshot.players.length,
       joined_at: player.joinedAt,
     });
-    this.snapshot.game.version += 1;
+    snapshot.game.version += 1;
   }
 
   async loadGame(code: string): Promise<unknown | null> {
-    if (!this.snapshot || this.snapshot.game.code !== code) return null;
-    return structuredClone(this.snapshot);
+    const snapshot = this.snapshots.get(code);
+    return snapshot ? structuredClone(snapshot) : null;
   }
 
   async commitGame(input: PersistedGameCommit): Promise<boolean> {
     await Promise.resolve();
-    if (!this.snapshot || this.snapshot.game.version !== input.expectedVersion) {
+    const snapshot = this.snapshots.get(input.game.code);
+    if (!snapshot || snapshot.game.version !== input.expectedVersion) {
       return false;
     }
     const nextVersion = input.expectedVersion + 1;
-    this.snapshot = snapshotFromGame(input.game, nextVersion, this.identities);
+    this.snapshots.set(
+      input.game.code,
+      snapshotFromGame(input.game, nextVersion, this.identities),
+    );
     this.successfulCommits += 1;
     return true;
   }
@@ -251,5 +279,49 @@ describe("SupabaseGameRepository", () => {
         "auth-ana",
       ),
     ).rejects.toMatchObject({ name: "UnauthorizedGameActionError" });
+  });
+
+  it("creates one rematch for the host and persists its invitation", async () => {
+    const gateway = new FakeSnapshotGateway();
+    const repository = new SupabaseGameRepository(gateway);
+    const ana = await repository.createRoom("Ana", "auth-ana");
+    const beto = await repository.joinRoom(ana.game.code, "Beto", "auth-beto");
+    await repository.startGame(ana.game.code, ana.player.id, "auth-ana");
+
+    await expect(
+      repository.createRematch(ana.game.code, beto.player.id, "auth-beto"),
+    ).rejects.toMatchObject({ code: "NOT_HOST" });
+
+    for (const [player, auth] of [
+      [ana.player, "auth-ana"],
+      [beto.player, "auth-beto"],
+    ] as const) {
+      await repository.submitEntry(
+        ana.game.code,
+        { playerId: player.id, roundNumber: 0, content: text(player.id, 0) },
+        auth,
+      );
+    }
+    for (const [player, auth] of [
+      [ana.player, "auth-ana"],
+      [beto.player, "auth-beto"],
+    ] as const) {
+      await repository.submitEntry(
+        ana.game.code,
+        { playerId: player.id, roundNumber: 1, content: drawing(player.id, 1) },
+        auth,
+      );
+    }
+
+    const rematch = await repository.createRematch(
+      ana.game.code,
+      ana.player.id,
+      "auth-ana",
+    );
+    const source = await repository.getRoom(ana.game.code);
+
+    expect(rematch.game).toMatchObject({ phase: "LOBBY", rematchCode: null });
+    expect(rematch.player.name).toBe("Ana");
+    expect(source?.rematchCode).toBe(rematch.game.code);
   });
 });

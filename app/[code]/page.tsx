@@ -91,6 +91,7 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
         {(game.phase === "REVEAL" || game.phase === "FINISHED") && (
           <RevealScreen
             canGenerateCommentary={canGenerateGameCommentary(game, currentPlayer.id)}
+            currentPlayerId={currentPlayer.id}
             initialComments={savedCommentary?.comments ?? []}
             drawingUrls={drawingUrls}
             game={game}

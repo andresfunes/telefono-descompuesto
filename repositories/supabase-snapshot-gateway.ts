@@ -23,6 +23,21 @@ export class SupabaseSnapshotGateway implements GameSnapshotGateway {
     if (error) throw error;
   }
 
+  async createRematch(
+    sourceCode: string,
+    authUserId: string,
+    newCode: string,
+  ): Promise<string> {
+    const { data, error } = await createAdminClient().rpc("create_game_rematch", {
+      p_auth_user_id: authUserId,
+      p_new_code: newCode,
+      p_source_code: sourceCode,
+    });
+    if (error) throw error;
+    if (typeof data !== "string") throw new Error("Supabase no devolvió la nueva sala.");
+    return data;
+  }
+
   async joinGame(code: string, authUserId: string, playerName: string): Promise<void> {
     const { error } = await createAdminClient().rpc("join_game", {
       p_auth_user_id: authUserId,

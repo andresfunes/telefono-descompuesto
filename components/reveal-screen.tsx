@@ -6,6 +6,7 @@ import {
   type Game,
 } from "@/domain/game";
 import { GameCommentary } from "./game-commentary";
+import { RematchControls } from "./rematch-controls";
 
 function DrawingReveal({
   asset,
@@ -58,11 +59,13 @@ export function RevealScreen({
   drawingUrls,
   canGenerateCommentary,
   initialComments,
+  currentPlayerId,
 }: {
   game: Game;
   drawingUrls: Record<string, string>;
   canGenerateCommentary: boolean;
   initialComments: string[];
+  currentPlayerId: string;
 }) {
   const playerNames = new Map(game.players.map((player) => [player.id, player.name]));
   const chains = revealChains(game);
@@ -74,6 +77,14 @@ export function RevealScreen({
         <h2 className="mt-3 text-3xl font-black">¡Así quedó la historia!</h2>
         <p className="mt-2 text-slate-600">De la frase original al último disparate.</p>
       </div>
+
+      <RematchControls
+        currentPlayerName={playerNames.get(currentPlayerId) ?? "Jugador"}
+        hostName={playerNames.get(game.hostPlayerId ?? "") ?? "El organizador"}
+        isHost={game.hostPlayerId === currentPlayerId}
+        rematchCode={game.rematchCode}
+        roomCode={game.code}
+      />
 
       <GameCommentary
         canGenerate={canGenerateCommentary}

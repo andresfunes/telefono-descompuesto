@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  addRematch,
   advanceRound,
   assignedChainForPlayer,
   createLobbyGame,
@@ -230,5 +231,28 @@ describe("round lifecycle", () => {
 
   it("uses typed rule errors", () => {
     expect(() => advanceRound(lobby(2))).toThrow(GameRuleError);
+  });
+});
+
+describe("rematches", () => {
+  it("lets only the host attach a new room after reveal", () => {
+    const revealed = playCompleteGame(2);
+    const updated = addRematch(revealed, "p0", "EFGH");
+
+    expect(updated.rematchCode).toBe("EFGH");
+    expect(() => addRematch(revealed, "p1", "EFGH")).toThrowError(
+      expect.objectContaining({ code: "NOT_HOST" }),
+    );
+    expect(() => addRematch(lobby(2), "p0", "EFGH")).toThrowError(
+      expect.objectContaining({ code: "GAME_NOT_FINISHED" }),
+    );
+  });
+
+  it("prevents attaching more than one new room", () => {
+    const revealed = addRematch(playCompleteGame(2), "p0", "EFGH");
+
+    expect(() => addRematch(revealed, "p0", "JKLM")).toThrowError(
+      expect.objectContaining({ code: "REMATCH_ALREADY_CREATED" }),
+    );
   });
 });

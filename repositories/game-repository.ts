@@ -5,6 +5,11 @@ export interface GameRepository {
     playerName: string,
     authUserId: string,
   ): Promise<{ game: Game; player: Player }>;
+  createRematch(
+    sourceCode: string,
+    requestedByPlayerId: string,
+    authUserId: string,
+  ): Promise<{ game: Game; player: Player }>;
   getRoom(code: string): Promise<Game | null>;
   getPlayerForUser(code: string, authUserId: string): Promise<Player | null>;
   joinRoom(
