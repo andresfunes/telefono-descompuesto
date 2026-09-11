@@ -6,6 +6,7 @@ import {
   createLobbyGame,
   expectedEntryTypeForRound,
   GameRuleError,
+  groupPlayersByRoundStatus,
   isCurrentRoundComplete,
   revealChains,
   startGame,
@@ -206,6 +207,22 @@ describe("round lifecycle", () => {
     }
     expect(isCurrentRoundComplete(game)).toBe(true);
     expect(advanceRound(game).currentRound?.number).toBe(1);
+  });
+
+  it("groups pending and completed players in stable join order", () => {
+    let game = startGame(lobby(4), "p0");
+    for (const playerId of ["p2", "p0"]) {
+      game = submitEntry(game, {
+        playerId,
+        roundNumber: 0,
+        content: contentForRound(0, playerId),
+      });
+    }
+
+    const groups = groupPlayersByRoundStatus(game);
+
+    expect(groups.pending.map((player) => player.id)).toEqual(["p1", "p3"]);
+    expect(groups.completed.map((player) => player.id)).toEqual(["p0", "p2"]);
   });
 
   it("transitions to reveal after one round per player", () => {

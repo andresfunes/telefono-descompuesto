@@ -63,6 +63,11 @@ export interface Round {
   submissions: RoundSubmission[];
 }
 
+export interface RoundPlayerGroups {
+  pending: Player[];
+  completed: Player[];
+}
+
 export interface Game {
   id: string;
   code: string;
@@ -337,6 +342,20 @@ export function isCurrentRoundComplete(game: Game): boolean {
     game.currentRound &&
       game.currentRound.submissions.length === game.players.length,
   );
+}
+
+export function groupPlayersByRoundStatus(game: Game): RoundPlayerGroups {
+  if (game.phase !== "PLAYING" || !game.currentRound) {
+    throw new GameRuleError("GAME_NOT_PLAYING", "La partida no está en una ronda activa.");
+  }
+
+  const completedPlayerIds = new Set(
+    game.currentRound.submissions.map((submission) => submission.playerId),
+  );
+  return {
+    pending: game.players.filter((player) => !completedPlayerIds.has(player.id)),
+    completed: game.players.filter((player) => completedPlayerIds.has(player.id)),
+  };
 }
 
 export function arePlayableRoundsComplete(game: Game): boolean {
