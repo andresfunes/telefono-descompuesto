@@ -2,6 +2,7 @@
 
 import { startTransition, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GAME_ACTION_PENDING_EVENT } from "@/lib/game-client-events";
 import { createClient } from "@/lib/supabase/client";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
@@ -10,6 +11,8 @@ type RealtimeStatus = "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR";
 export function GameRealtime({ gameId }: { gameId: string }) {
   const router = useRouter();
   const refreshTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const actionPendingRef = useRef(false);
+  const refreshQueuedRef = useRef(false);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
 
   useEffect(() => {
@@ -17,12 +20,32 @@ export function GameRealtime({ gameId }: { gameId: string }) {
     let active = true;
     let channel: ReturnType<typeof supabase.channel> | undefined;
 
-    const refreshGame = () => {
+    const scheduleRefresh = () => {
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
       refreshTimer.current = setTimeout(() => {
         startTransition(() => router.refresh());
       }, 80);
     };
+
+    const refreshGame = () => {
+      if (actionPendingRef.current) {
+        refreshQueuedRef.current = true;
+        return;
+      }
+      scheduleRefresh();
+    };
+
+    const handleActionPending = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const detail = event.detail as { pending?: unknown };
+      actionPendingRef.current = detail.pending === true;
+      if (!actionPendingRef.current && refreshQueuedRef.current) {
+        refreshQueuedRef.current = false;
+        scheduleRefresh();
+      }
+    };
+
+    window.addEventListener(GAME_ACTION_PENDING_EVENT, handleActionPending);
 
     const subscribe = async () => {
       await supabase.realtime.setAuth();
@@ -51,6 +74,7 @@ export function GameRealtime({ gameId }: { gameId: string }) {
     void subscribe();
     return () => {
       active = false;
+      window.removeEventListener(GAME_ACTION_PENDING_EVENT, handleActionPending);
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
       if (channel) void supabase.removeChannel(channel);
     };

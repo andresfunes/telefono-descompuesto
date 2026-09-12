@@ -2,10 +2,11 @@
 
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { useActionState, useRef, useState, type FormEvent } from "react";
+import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
 import { useFormStatus } from "react-dom";
 import { startRoomGame, submitTurn, type FormState } from "@/app/actions";
 import type { PlayableEntryType } from "@/domain/game";
+import { GAME_ACTION_PENDING_EVENT } from "@/lib/game-client-events";
 import type { DrawingCanvasHandle } from "./drawing/drawing-canvas";
 
 const DrawingCanvas = dynamic(() => import("./drawing/drawing-canvas"), {
@@ -29,6 +30,20 @@ function ActionButton({
   disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
+
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent(GAME_ACTION_PENDING_EVENT, { detail: { pending } }),
+    );
+    return () => {
+      if (pending) {
+        window.dispatchEvent(
+          new CustomEvent(GAME_ACTION_PENDING_EVENT, { detail: { pending: false } }),
+        );
+      }
+    };
+  }, [pending]);
+
   return (
     <button
       className="min-h-12 w-full rounded-2xl bg-[var(--ink)] px-5 py-3 font-black text-white shadow-[0_5px_0_#ff6b4a] transition active:translate-y-1 active:shadow-none disabled:opacity-60"

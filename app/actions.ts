@@ -260,7 +260,7 @@ export async function submitTurn(
   }
 
   revalidatePath(`/${code}`);
-  redirect(`/${code}`);
+  return {};
 }
 
 export async function generateCommentary(
