@@ -145,6 +145,7 @@ interface TurnFormProps {
   playerId: string;
   roundNumber: number;
   entryType: PlayableEntryType;
+  initialPromptExample?: string;
   previousText?: string;
   previousDrawingUrl?: string;
 }
@@ -154,6 +155,7 @@ export function TurnForm({
   playerId,
   roundNumber,
   entryType,
+  initialPromptExample,
   previousText,
   previousDrawingUrl,
 }: TurnFormProps) {
@@ -245,7 +247,7 @@ export function TurnForm({
             maxLength={240}
             name="value"
             onChange={updateTextDraft}
-            placeholder={roundNumber === 0 ? "Messi haciendo un asado…" : "Un hombre cocinando una vaca…"}
+            placeholder={roundNumber === 0 ? `${initialPromptExample ?? ""}…` : undefined}
             required
             value={textDraft}
           />

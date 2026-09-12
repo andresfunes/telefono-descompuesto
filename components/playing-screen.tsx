@@ -5,6 +5,7 @@ import {
   type Player,
 } from "@/domain/game";
 import { TurnForm } from "./game-controls";
+import { randomExamplePrompt } from "@/lib/example-prompts";
 
 export function PlayingScreen({
   game,
@@ -109,6 +110,7 @@ export function PlayingScreen({
       ) : (
         <TurnForm
           entryType={round.expectedEntryType}
+          initialPromptExample={round.number === 0 ? randomExamplePrompt() : undefined}
           previousDrawingUrl={previousDrawingUrl}
           previousText={previousText}
           playerId={currentPlayer.id}
