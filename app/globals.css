@@ -27,3 +27,17 @@ button,
 input {
   font: inherit;
 }
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .drawing-room-page {
+    max-width: none;
+    padding: 1rem 0.5rem;
+  }
+
+  .drawing-room-panel {
+    margin-top: 0.75rem;
+    border-radius: 1.25rem;
+    padding: 0.75rem;
+    box-shadow: 5px 5px 0 var(--ink);
+  }
+}

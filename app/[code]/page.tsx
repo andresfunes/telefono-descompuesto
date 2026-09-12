@@ -46,11 +46,23 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
     game.phase === "REVEAL" || game.phase === "FINISHED"
       ? await gameCommentaryStore.getByRoomCode(code)
       : null;
+  const isDrawingTurn =
+    game.phase === "PLAYING" && game.currentRound?.expectedEntryType === "drawing";
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-2xl px-5 py-10 sm:py-16">
+    <main
+      className={`mx-auto min-h-screen w-full max-w-2xl sm:px-5 sm:py-16 ${
+        isDrawingTurn ? "drawing-room-page px-2 py-6" : "px-5 py-10"
+      }`}
+    >
       <Link className="font-bold underline" href="/">← Salir</Link>
-      <section className="mt-6 rounded-[2rem] border-2 border-[var(--ink)] bg-white/90 p-6 shadow-[8px_8px_0_var(--ink)] sm:p-9">
+      <section
+        className={`border-2 border-[var(--ink)] bg-white/90 sm:mt-6 sm:rounded-[2rem] sm:p-9 sm:shadow-[8px_8px_0_var(--ink)] ${
+          isDrawingTurn
+            ? "drawing-room-panel mt-4 rounded-[1.5rem] p-3 shadow-[5px_5px_0_var(--ink)]"
+            : "mt-6 rounded-[2rem] p-6 shadow-[8px_8px_0_var(--ink)]"
+        }`}
+      >
         <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-dashed border-slate-300 pb-6">
           <div>
             <p className="text-sm font-bold uppercase tracking-widest">Sala</p>
