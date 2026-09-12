@@ -9,7 +9,7 @@ import {
 } from "react";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
-import { Layer, Line, Rect, Stage } from "react-konva";
+import { Circle, Layer, Line, Rect, Stage } from "react-konva";
 import { DrawingToolbar } from "./drawing-toolbar";
 import {
   addStroke,
@@ -18,6 +18,7 @@ import {
   createStroke,
   EMPTY_DRAWING_HISTORY,
   isDrawingEmpty,
+  isTapStroke,
   redoDrawing,
   undoDrawing,
   type DrawingHistory,
@@ -192,18 +193,31 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
             </Layer>
             <Layer listening={false}>
               {visibleStrokes.map((stroke) => (
-                <Line
-                  globalCompositeOperation={
-                    stroke.tool === "eraser" ? "destination-out" : "source-over"
-                  }
-                  key={stroke.id}
-                  lineCap="round"
-                  lineJoin="round"
-                  points={stroke.points}
-                  stroke={stroke.color}
-                  strokeWidth={stroke.width}
-                  tension={0.35}
-                />
+                isTapStroke(stroke) ? (
+                  <Circle
+                    fill={stroke.color}
+                    globalCompositeOperation={
+                      stroke.tool === "eraser" ? "destination-out" : "source-over"
+                    }
+                    key={stroke.id}
+                    radius={stroke.width / 2}
+                    x={stroke.points[0]}
+                    y={stroke.points[1]}
+                  />
+                ) : (
+                  <Line
+                    globalCompositeOperation={
+                      stroke.tool === "eraser" ? "destination-out" : "source-over"
+                    }
+                    key={stroke.id}
+                    lineCap="round"
+                    lineJoin="round"
+                    points={stroke.points}
+                    stroke={stroke.color}
+                    strokeWidth={stroke.width}
+                    tension={0.35}
+                  />
+                )
               ))}
             </Layer>
           </Stage>

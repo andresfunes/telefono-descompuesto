@@ -40,6 +40,19 @@ export function appendPoint(stroke: DrawingStroke, point: DrawingPoint): Drawing
   return { ...stroke, points: [...stroke.points, point.x, point.y] };
 }
 
+export function isTapStroke(stroke: DrawingStroke): boolean {
+  const [initialX, initialY] = stroke.points;
+  if (initialX === undefined || initialY === undefined) return false;
+
+  for (let index = 2; index < stroke.points.length; index += 2) {
+    if (stroke.points[index] !== initialX || stroke.points[index + 1] !== initialY) {
+      return false;
+    }
+  }
+
+  return stroke.points.length >= 4;
+}
+
 export function addStroke(history: DrawingHistory, stroke: DrawingStroke): DrawingHistory {
   return {
     strokes: [...history.strokes, stroke],

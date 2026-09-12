@@ -6,6 +6,7 @@ import {
   createStroke,
   EMPTY_DRAWING_HISTORY,
   isDrawingEmpty,
+  isTapStroke,
   redoDrawing,
   undoDrawing,
 } from "@/components/drawing/drawing-state";
@@ -16,9 +17,12 @@ function penStroke(id: string) {
 
 describe("drawing state", () => {
   it("creates tap-safe strokes and adds vector points", () => {
+    const tap = penStroke("tap");
     const stroke = appendPoint(penStroke("one"), { x: 30, y: 40 });
     const history = addStroke(EMPTY_DRAWING_HISTORY, stroke);
 
+    expect(isTapStroke(tap)).toBe(true);
+    expect(isTapStroke(stroke)).toBe(false);
     expect(stroke.points).toEqual([10, 20, 10, 20, 30, 40]);
     expect(history.strokes).toEqual([stroke]);
     expect(history.past).toEqual([[]]);
