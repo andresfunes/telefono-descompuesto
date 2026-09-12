@@ -62,14 +62,14 @@ export function RoomInvitation({ roomCode }: { roomCode: string }) {
     : undefined;
 
   return (
-    <section className="mt-6 rounded-2xl border-2 border-[var(--ink)] bg-[var(--mint)]/45 p-4 sm:p-5">
+    <section className="mt-6 overflow-hidden rounded-2xl border-2 border-[var(--ink)] bg-[var(--mint)]/45 p-4 sm:p-5">
       <h2 className="text-xl font-black">Invitá a tus amigos</h2>
       <p className="mt-1 text-sm text-slate-700">
         Que escaneen el QR o mandales el enlace de la sala.
       </p>
 
-      <div className="mt-4 grid items-center gap-4 sm:grid-cols-[12rem_1fr] sm:gap-5">
-        <div className="mx-auto grid size-48 place-items-center overflow-hidden rounded-2xl bg-[var(--cream)] shadow-sm">
+      <div className="mt-4 flex min-w-0 flex-col items-center gap-4 sm:grid sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-5">
+        <div className="grid size-48 shrink-0 place-items-center justify-self-center overflow-hidden rounded-2xl bg-[var(--cream)] shadow-sm">
           {invitationUrl ? (
             <QRCodeSVG
               bgColor="#fff8e9"
@@ -85,8 +85,8 @@ export function RoomInvitation({ roomCode }: { roomCode: string }) {
           )}
         </div>
 
-        <div className="space-y-4">
-          <div className="flex min-w-0 items-center overflow-hidden rounded-xl bg-white/80 shadow-sm">
+        <div className="w-full min-w-0 space-y-4">
+          <div className="flex w-full min-w-0 items-center overflow-hidden rounded-xl bg-white/80 shadow-sm">
             <p
               className="min-w-0 flex-1 truncate px-3 py-2 text-sm font-semibold"
               title={invitationUrl}

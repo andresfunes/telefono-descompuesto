@@ -72,11 +72,6 @@ export function StartGameForm({
   return (
     <form action={action} className="space-y-3">
       <input name="roomCode" type="hidden" value={roomCode} />
-      {!hasMinimumPlayers && (
-        <p className="text-center text-sm font-semibold text-slate-600" role="status">
-          Esperando a que se una al menos 1 jugador más…
-        </p>
-      )}
       {state.error && <p className="text-center text-sm font-semibold text-red-700">{state.error}</p>}
       <ActionButton
         disabled={!hasMinimumPlayers}

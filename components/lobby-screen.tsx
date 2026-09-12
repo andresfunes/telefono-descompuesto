@@ -59,7 +59,12 @@ export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer
                 : `Sala abierta · ${game.players.length} / ${MAXIMUM_PLAYER_COUNT} jugadores`}
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          {!hasMinimumPlayers && (
+            <p className="text-center text-sm font-semibold text-slate-600" role="status">
+              Esperando a que se una al menos 1 jugador más…
+            </p>
+          )}
+          <div className="grid items-end gap-3 sm:grid-cols-2">
             <LobbyLockForm locked={game.lobbyLocked} roomCode={game.code} />
             <StartGameForm
               hasMinimumPlayers={hasMinimumPlayers}
