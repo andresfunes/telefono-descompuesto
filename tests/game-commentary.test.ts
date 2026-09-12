@@ -3,8 +3,12 @@ import {
   buildCommentaryInput,
   buildCommentaryTranscript,
   canGenerateGameCommentary,
+  deserializeGameCommentaryItem,
+  eligibleGameAwardCategories,
   GAME_COMMENTARY_INSTRUCTIONS,
   parseHumorIntensity,
+  serializeGameCommentaryItem,
+  validateCommentaryResponse,
   validateCommentaryItems,
 } from "@/domain/game-commentary";
 import type { Game } from "@/domain/game";
@@ -120,10 +124,123 @@ describe("game commentary context", () => {
     }]);
   });
 
+  it("creates grounded awards and derives the winner name from the winning entry", () => {
+    const result = validateCommentaryResponse({
+      comments: [
+        {
+          text: "El caballo sobrevivió.",
+          chain_id: "chain-1",
+          entry_ids: ["entry-text", "entry-drawing"],
+        },
+      ],
+      awards: [
+        {
+          category: "BEST_DRAWING",
+          reason: "entregó el único caballo con posibilidades.",
+          winner_entry_id: "entry-drawing",
+          entry_ids: ["entry-drawing"],
+        },
+        {
+          category: "MOST_ORIGINAL_PHRASE",
+          reason: "mandó un caballo a la playa sin explicaciones.",
+          winner_entry_id: "entry-text",
+          entry_ids: ["entry-text"],
+        },
+        {
+          category: "CHAOS_AGENT",
+          reason: "transformó la idea justo antes del cierre.",
+          winner_entry_id: "entry-drawing",
+          entry_ids: ["entry-text", "entry-drawing"],
+        },
+      ],
+    }, revealedGame());
+
+    expect(result[0]).toMatchObject({
+      text: expect.stringContaining("Mejor dibujante · Sofía"),
+      entryIds: ["entry-drawing"],
+      playerIds: ["p2"],
+    });
+    expect(result).toHaveLength(4);
+  });
+
+  it("enables the interpretation award only when a player interpreted a drawing", () => {
+    const twoPlayerGame = revealedGame();
+    expect(eligibleGameAwardCategories(twoPlayerGame)).not.toContain(
+      "BEST_INTERPRETATION",
+    );
+
+    const threePlayerGame: Game = {
+      ...twoPlayerGame,
+      players: [
+        ...twoPlayerGame.players,
+        { id: "p3", name: "Mateo", joinedAt: new Date("2026-01-01T00:00:02Z") },
+      ],
+      chains: [{
+        ...twoPlayerGame.chains[0],
+        entries: [
+          ...twoPlayerGame.chains[0].entries,
+          {
+            id: "entry-interpretation",
+            playerId: "p3",
+            roundNumber: 2,
+            createdAt: new Date("2026-01-01T00:03:00Z"),
+            content: { type: "text", text: "Una vaca tomando sol" },
+          },
+        ],
+      }],
+    };
+
+    expect(eligibleGameAwardCategories(threePlayerGame)).toContain(
+      "BEST_INTERPRETATION",
+    );
+  });
+
+  it("persists the chain reference while keeping legacy comments readable", () => {
+    const serialized = serializeGameCommentaryItem({
+      text: "Comentario de la primera cadena.",
+      entryIds: ["entry-text"],
+      playerIds: ["p1"],
+      chainId: "chain-1",
+    });
+
+    expect(deserializeGameCommentaryItem(serialized)).toEqual({
+      version: 1,
+      text: "Comentario de la primera cadena.",
+      entryIds: ["entry-text"],
+      chainId: "chain-1",
+    });
+    expect(deserializeGameCommentaryItem("Comentario anterior.")).toEqual({
+      version: 1,
+      text: "Comentario anterior.",
+      entryIds: [],
+    });
+  });
+
+  it("rejects an award assigned to the wrong contribution type", () => {
+    expect(() => validateCommentaryResponse({
+      comments: [
+        {
+          text: "Comentario de la cadena.",
+          chain_id: "chain-1",
+          entry_ids: ["entry-text", "entry-drawing"],
+        },
+      ],
+      awards: [
+        {
+          category: "BEST_DRAWING",
+          reason: "ganó.",
+          winner_entry_id: "entry-text",
+          entry_ids: ["entry-text"],
+        },
+      ],
+    }, revealedGame())).toThrow("no corresponde a la categoría");
+  });
+
   it("defaults unknown intensity values and defines the safe roast boundary", () => {
     expect(parseHumorIntensity("anything")).toBe("STANDARD");
     expect(GAME_COMMENTARY_INSTRUCTIONS).toContain("No tenés nombre");
     expect(GAME_COMMENTARY_INSTRUCTIONS).toContain("Criticá exclusivamente lo ocurrido");
     expect(GAME_COMMENTARY_INSTRUCTIONS).toContain("inteligencia real");
+    expect(GAME_COMMENTARY_INSTRUCTIONS).toContain("mejor dibujo");
   });
 });

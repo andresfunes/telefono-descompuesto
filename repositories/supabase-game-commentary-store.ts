@@ -1,6 +1,9 @@
 import "server-only";
 
-import { parseHumorIntensity } from "@/domain/game-commentary";
+import {
+  parseHumorIntensity,
+  serializeGameCommentaryItem,
+} from "@/domain/game-commentary";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   AiGenerationReservation,
@@ -104,7 +107,7 @@ export class SupabaseGameCommentaryStore implements GameCommentaryStore {
   ): Promise<StoredGameCommentary> {
     const { data, error } = await createAdminClient().rpc("complete_ai_commentary", {
       p_auth_user_id: input.authUserId,
-      p_comments: input.comments.map((comment) => comment.text),
+      p_comments: input.comments.map(serializeGameCommentaryItem),
       p_game_id: input.gameId,
       p_intensity: input.intensity,
       p_reservation_token: input.reservationToken,

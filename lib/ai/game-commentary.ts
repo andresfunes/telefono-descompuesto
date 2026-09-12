@@ -3,8 +3,9 @@ import "server-only";
 import OpenAI from "openai";
 import {
   buildCommentaryInput,
+  eligibleGameAwardCategories,
   GAME_COMMENTARY_INSTRUCTIONS,
-  validateCommentaryItems,
+  validateCommentaryResponse,
   type GameCommentaryItem,
   type HumorIntensity,
 } from "@/domain/game-commentary";
@@ -21,6 +22,7 @@ interface CommentaryResponse {
 
 function buildCommentarySchema(game: Game) {
   const entryIds = game.chains.flatMap((chain) => chain.entries.map((entry) => entry.id));
+  const awardCategories = eligibleGameAwardCategories(game);
 
   return {
     type: "object",
@@ -28,24 +30,48 @@ function buildCommentarySchema(game: Game) {
     properties: {
       comments: {
         type: "array",
-        minItems: 1,
-        maxItems: 8,
+        minItems: game.chains.length,
+        maxItems: game.chains.length,
         items: {
           type: "object",
           additionalProperties: false,
           properties: {
             text: { type: "string", minLength: 1, maxLength: 320 },
+            chain_id: {
+              type: "string",
+              enum: game.chains.map((chain) => chain.id),
+            },
             entry_ids: {
               type: "array",
               minItems: 1,
               items: { type: "string", enum: entryIds },
             },
           },
-          required: ["text", "entry_ids"],
+          required: ["text", "chain_id", "entry_ids"],
+        },
+      },
+      awards: {
+        type: "array",
+        minItems: awardCategories.includes("BEST_INTERPRETATION") ? 4 : 3,
+        maxItems: awardCategories.length,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            category: { type: "string", enum: awardCategories },
+            reason: { type: "string", minLength: 1, maxLength: 240 },
+            winner_entry_id: { type: "string", enum: entryIds },
+            entry_ids: {
+              type: "array",
+              minItems: 1,
+              items: { type: "string", enum: entryIds },
+            },
+          },
+          required: ["category", "reason", "winner_entry_id", "entry_ids"],
         },
       },
     },
-    required: ["comments"],
+    required: ["comments", "awards"],
   } as const;
 }
 
@@ -89,7 +115,7 @@ export function parseCommentaryResponse(
   }
 
   try {
-    return validateCommentaryItems(JSON.parse(response.output_text) as unknown, game);
+    return validateCommentaryResponse(JSON.parse(response.output_text) as unknown, game);
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new CommentaryResponseError(
@@ -98,7 +124,11 @@ export function parseCommentaryResponse(
         { cause: error },
       );
     }
-    throw error;
+    throw new CommentaryResponseError(
+      "OpenAI devolvió comentarios o premios inválidos.",
+      true,
+      { cause: error },
+    );
   }
 }
 

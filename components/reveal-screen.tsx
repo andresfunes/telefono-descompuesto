@@ -90,12 +90,14 @@ export function RevealScreen({
 
       <GameCommentary
         canGenerate={canGenerateCommentary}
+        chainEntryIds={Object.fromEntries(
+          chains.map((chain) => [chain.id, chain.entries.map((entry) => entry.id)]),
+        )}
+        chainIds={chains.map((chain) => chain.id)}
         commentaryAvailable={commentaryAvailable}
         initialComments={initialComments}
         roomCode={game.code}
-      />
-
-      <div className="space-y-8">
+      >
         {chains.map((chain, chainIndex) => (
           <article
             className="rounded-[1.5rem] border-2 border-[var(--ink)] bg-[var(--cream)] p-5"
@@ -121,7 +123,7 @@ export function RevealScreen({
             </ol>
           </article>
         ))}
-      </div>
+      </GameCommentary>
     </div>
   );
 }
