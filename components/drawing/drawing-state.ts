@@ -93,3 +93,33 @@ export function clearDrawing(history: DrawingHistory): DrawingHistory {
 export function isDrawingEmpty(strokes: readonly DrawingStroke[]): boolean {
   return !strokes.some((stroke) => stroke.tool === "pen" && stroke.points.length >= 4);
 }
+
+export function serializeDrawingDraft(strokes: readonly DrawingStroke[]): string {
+  return JSON.stringify({ version: 1, strokes });
+}
+
+export function deserializeDrawingDraft(value: string): DrawingStroke[] {
+  try {
+    const parsed = JSON.parse(value) as { version?: unknown; strokes?: unknown };
+    if (parsed.version !== 1 || !Array.isArray(parsed.strokes)) return [];
+
+    return parsed.strokes.filter((candidate): candidate is DrawingStroke => {
+      if (!candidate || typeof candidate !== "object") return false;
+      const stroke = candidate as Partial<DrawingStroke>;
+      return (
+        typeof stroke.id === "string" &&
+        (stroke.tool === "pen" || stroke.tool === "eraser") &&
+        typeof stroke.color === "string" &&
+        typeof stroke.width === "number" &&
+        Number.isFinite(stroke.width) &&
+        stroke.width > 0 &&
+        Array.isArray(stroke.points) &&
+        stroke.points.length >= 4 &&
+        stroke.points.length % 2 === 0 &&
+        stroke.points.every((point) => typeof point === "number" && Number.isFinite(point))
+      );
+    });
+  } catch {
+    return [];
+  }
+}

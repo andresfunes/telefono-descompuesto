@@ -30,7 +30,9 @@ export const DRAWING_COLORS = [
   ...PRIMARY_DRAWING_COLORS,
   ...EXTRA_DRAWING_COLORS,
 ].map(({ value }) => value);
-export const BRUSH_SIZES = [6, 12, 24];
+export const PRIMARY_BRUSH_SIZES = [6, 12, 24] as const;
+export const EXTRA_BRUSH_SIZES = [36, 48] as const;
+export const BRUSH_SIZES = [...PRIMARY_BRUSH_SIZES, ...EXTRA_BRUSH_SIZES];
 
 interface DrawingToolbarProps {
   tool: DrawingTool;
@@ -67,12 +69,19 @@ export function DrawingToolbar({
   onClear,
 }: DrawingToolbarProps) {
   const extraColorsRef = useRef<HTMLDetailsElement>(null);
+  const extraBrushSizesRef = useRef<HTMLDetailsElement>(null);
   const selectedExtraColor = EXTRA_DRAWING_COLORS.find((option) => option.value === color);
+  const selectedExtraBrushSize = EXTRA_BRUSH_SIZES.find((size) => size === brushSize);
 
   const selectColor = (value: string, closeExtraColors = false) => {
     onColorChange(value);
     onToolChange("pen");
     if (closeExtraColors) extraColorsRef.current?.removeAttribute("open");
+  };
+
+  const selectBrushSize = (size: number, closeExtraSizes = false) => {
+    onBrushSizeChange(size);
+    if (closeExtraSizes) extraBrushSizesRef.current?.removeAttribute("open");
   };
 
   return (
@@ -162,13 +171,13 @@ export function DrawingToolbar({
 
         <fieldset className="flex items-center gap-2">
           <legend className="sr-only">Grosor</legend>
-          {BRUSH_SIZES.map((size) => (
+          {PRIMARY_BRUSH_SIZES.map((size) => (
             <button
               aria-label={`Grosor ${size}`}
               aria-pressed={brushSize === size}
               className={`${buttonClass} p-0`}
               key={size}
-              onClick={() => onBrushSizeChange(size)}
+              onClick={() => selectBrushSize(size)}
               type="button"
             >
               <span
@@ -177,6 +186,54 @@ export function DrawingToolbar({
               />
             </button>
           ))}
+          <details className="relative" ref={extraBrushSizesRef}>
+            <summary
+              aria-label={selectedExtraBrushSize
+                ? `Más grosores. Seleccionado: ${selectedExtraBrushSize}`
+                : "Más grosores"}
+              className={`${buttonClass} relative cursor-pointer list-none p-0 [&::-webkit-details-marker]:hidden ${
+                selectedExtraBrushSize
+                  ? "shadow-[inset_0_0_0_3px_var(--coral)]"
+                  : ""
+              }`}
+              style={{
+                backgroundColor: selectedExtraBrushSize ? "var(--mint)" : "white",
+              }}
+              title="Más grosores"
+            >
+              {selectedExtraBrushSize ? (
+                <>
+                  <span
+                    className="block rounded-full bg-[var(--ink)]"
+                    style={{
+                      height: selectedExtraBrushSize / 2,
+                      width: selectedExtraBrushSize / 2,
+                    }}
+                  />
+                  <span className="absolute right-0.5 top-0.5 text-xs leading-none">+</span>
+                </>
+              ) : (
+                <span className="text-xl leading-none">+</span>
+              )}
+            </summary>
+            <div className="absolute left-1/2 top-full z-20 mt-3 flex w-[7.75rem] -translate-x-1/2 items-center justify-center gap-2 rounded-2xl border-2 border-[var(--ink)] bg-white p-3 shadow-[5px_5px_0_var(--ink)]">
+              {EXTRA_BRUSH_SIZES.map((size) => (
+                <button
+                  aria-label={`Grosor ${size}`}
+                  aria-pressed={brushSize === size}
+                  className={`${buttonClass} p-0`}
+                  key={size}
+                  onClick={() => selectBrushSize(size, true)}
+                  type="button"
+                >
+                  <span
+                    className="block rounded-full bg-[var(--ink)]"
+                    style={{ height: size / 2, width: size / 2 }}
+                  />
+                </button>
+              ))}
+            </div>
+          </details>
         </fieldset>
       </div>
     </div>

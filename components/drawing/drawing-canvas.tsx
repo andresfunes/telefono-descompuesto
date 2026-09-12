@@ -16,10 +16,12 @@ import {
   appendPoint,
   clearDrawing,
   createStroke,
+  deserializeDrawingDraft,
   EMPTY_DRAWING_HISTORY,
   isDrawingEmpty,
   isTapStroke,
   redoDrawing,
+  serializeDrawingDraft,
   undoDrawing,
   type DrawingHistory,
   type DrawingPoint,
@@ -27,6 +29,7 @@ import {
   type DrawingTool,
 } from "./drawing-state";
 import { exportStageToPng } from "./export-drawing";
+import { readTurnDraft, writeTurnDraft } from "@/lib/turn-draft";
 
 export const LOGICAL_CANVAS_WIDTH = 960;
 export const LOGICAL_CANVAS_HEIGHT = 720;
@@ -42,9 +45,13 @@ function clampPoint(point: DrawingPoint): DrawingPoint {
   };
 }
 
-const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, ref) {
+const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(function DrawingCanvas(
+  { storageKey },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
+  const cursorRef = useRef<Konva.Circle>(null);
   const activePointerRef = useRef<number | null>(null);
   const draftRef = useRef<DrawingStroke | null>(null);
   const historyRef = useRef<DrawingHistory>(EMPTY_DRAWING_HISTORY);
@@ -55,10 +62,12 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
   const [tool, setTool] = useState<DrawingTool>("pen");
   const [color, setColor] = useState("#18231f");
   const [brushSize, setBrushSize] = useState(12);
+  const [cursorPoint, setCursorPoint] = useState<DrawingPoint | null>(null);
 
   const replaceHistory = (nextHistory: DrawingHistory) => {
     historyRef.current = nextHistory;
     setHistory(nextHistory);
+    writeTurnDraft(storageKey, serializeDrawingDraft(nextHistory.strokes));
   };
 
   const finishStroke = (): DrawingHistory => {
@@ -72,6 +81,13 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
     replaceHistory(nextHistory);
     return nextHistory;
   };
+
+  useEffect(() => {
+    const strokes = deserializeDrawingDraft(readTurnDraft(storageKey) ?? "");
+    const restoredHistory = { strokes, past: [], future: [] };
+    historyRef.current = restoredHistory;
+    setHistory(restoredHistory);
+  }, [storageKey]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -96,10 +112,15 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
         : historyRef.current.strokes;
       if (isDrawingEmpty(strokes) || !stageRef.current) return null;
 
+      const cursor = cursorRef.current;
+      cursor?.hide();
+      cursor?.getLayer()?.draw();
       const png = exportStageToPng(stageRef.current, {
         width: LOGICAL_CANVAS_WIDTH,
         height: LOGICAL_CANVAS_HEIGHT,
       });
+      cursor?.show();
+      cursor?.getLayer()?.draw();
       finishStroke();
       return png;
     },
@@ -116,6 +137,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
     event.evt.preventDefault();
     const point = pointerPosition(event);
     if (!point) return;
+    setCursorPoint(point);
 
     activePointerRef.current = event.evt.pointerId;
     strokeSequenceRef.current += 1;
@@ -131,10 +153,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
   };
 
   const handlePointerMove = (event: KonvaEventObject<PointerEvent>) => {
-    if (activePointerRef.current !== event.evt.pointerId || !draftRef.current) return;
-    event.evt.preventDefault();
     const point = pointerPosition(event);
     if (!point) return;
+    setCursorPoint(point);
+    if (activePointerRef.current !== event.evt.pointerId || !draftRef.current) return;
+    event.evt.preventDefault();
 
     const nextDraft = appendPoint(draftRef.current, point);
     draftRef.current = nextDraft;
@@ -145,6 +168,16 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
     if (activePointerRef.current !== event.evt.pointerId) return;
     event.evt.preventDefault();
     finishStroke();
+  };
+
+  const handlePointerLeave = (event: KonvaEventObject<PointerEvent>) => {
+    setCursorPoint(null);
+    handlePointerEnd(event);
+  };
+
+  const handlePointerCancel = (event: KonvaEventObject<PointerEvent>) => {
+    setCursorPoint(null);
+    handlePointerEnd(event);
   };
 
   const scale = containerWidth / LOGICAL_CANVAS_WIDTH;
@@ -169,7 +202,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
 
       <div
         aria-label="Lienzo de dibujo"
-        className="w-full overflow-hidden rounded-2xl border-2 border-[var(--ink)] bg-white shadow-inner"
+        className="w-full cursor-none overflow-hidden rounded-2xl border-2 border-[var(--ink)] bg-white shadow-inner"
         data-testid="drawing-canvas"
         ref={containerRef}
         role="application"
@@ -178,9 +211,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
         {containerWidth > 0 && (
           <Stage
             height={LOGICAL_CANVAS_HEIGHT * scale}
-            onPointerCancel={handlePointerEnd}
+            onPointerCancel={handlePointerCancel}
             onPointerDown={handlePointerDown}
-            onPointerLeave={handlePointerEnd}
+            onPointerEnter={(event) => setCursorPoint(pointerPosition(event))}
+            onPointerLeave={handlePointerLeave}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerEnd}
             ref={stageRef}
@@ -219,6 +253,21 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle>(function DrawingCanvas(_, 
                   />
                 )
               ))}
+            </Layer>
+            <Layer listening={false}>
+              {cursorPoint && (
+                <Circle
+                  dash={tool === "eraser" ? [6 / scale, 4 / scale] : undefined}
+                  fill={tool === "eraser" ? "#ffffff" : color}
+                  opacity={tool === "eraser" ? 0.8 : 0.55}
+                  radius={brushSize / 2}
+                  ref={cursorRef}
+                  stroke={tool === "eraser" ? "#18231f" : color}
+                  strokeWidth={2 / scale}
+                  x={cursorPoint.x}
+                  y={cursorPoint.y}
+                />
+              )}
             </Layer>
           </Stage>
         )}

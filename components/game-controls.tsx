@@ -2,7 +2,15 @@
 
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
 import { useFormStatus } from "react-dom";
 import {
   removeRoomPlayer,
@@ -13,6 +21,12 @@ import {
 } from "@/app/actions";
 import type { PlayableEntryType } from "@/domain/game";
 import { GAME_ACTION_PENDING_EVENT } from "@/lib/game-client-events";
+import {
+  readTurnDraft,
+  removeTurnDraft,
+  turnDraftStorageKey,
+  writeTurnDraft,
+} from "@/lib/turn-draft";
 import type { DrawingCanvasHandle } from "./drawing/drawing-canvas";
 
 const DrawingCanvas = dynamic(() => import("./drawing/drawing-canvas"), {
@@ -128,6 +142,7 @@ export function RemovePlayerForm({
 
 interface TurnFormProps {
   roomCode: string;
+  playerId: string;
   roundNumber: number;
   entryType: PlayableEntryType;
   previousText?: string;
@@ -136,15 +151,39 @@ interface TurnFormProps {
 
 export function TurnForm({
   roomCode,
+  playerId,
   roundNumber,
   entryType,
   previousText,
   previousDrawingUrl,
 }: TurnFormProps) {
-  const [state, action] = useActionState(submitTurn, initialState);
-  const [drawingError, setDrawingError] = useState<string>();
   const drawingCanvasRef = useRef<DrawingCanvasHandle>(null);
   const drawingValueRef = useRef<HTMLInputElement>(null);
+  const draftStorageKey = turnDraftStorageKey({
+    roomCode,
+    playerId,
+    roundNumber,
+    entryType,
+  });
+  const submitAndClearDraft = useCallback(async (
+    previousState: FormState,
+    formData: FormData,
+  ) => {
+    const result = await submitTurn(previousState, formData);
+    if (!result.error) removeTurnDraft(draftStorageKey);
+    return result;
+  }, [draftStorageKey]);
+  const [state, action] = useActionState(submitAndClearDraft, initialState);
+  const [drawingError, setDrawingError] = useState<string>();
+  const [textDraft, setTextDraft] = useState(() =>
+    entryType === "text" ? readTurnDraft(draftStorageKey) ?? "" : "",
+  );
+
+  const updateTextDraft = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    const value = event.target.value;
+    setTextDraft(value);
+    writeTurnDraft(draftStorageKey, value);
+  };
 
   const prepareDrawingSubmission = (event: FormEvent<HTMLFormElement>) => {
     if (entryType !== "drawing") return;
@@ -170,7 +209,7 @@ export function TurnForm({
             <p className="text-xs font-black uppercase tracking-widest text-slate-500">Dibujá esto</p>
             <p className="mt-1 text-lg font-black">“{previousText}”</p>
           </div>
-          <DrawingCanvas ref={drawingCanvasRef} />
+          <DrawingCanvas ref={drawingCanvasRef} storageKey={draftStorageKey} />
           <input name="value" ref={drawingValueRef} type="hidden" />
         </div>
       ) : (
@@ -205,8 +244,10 @@ export function TurnForm({
             id="text-entry"
             maxLength={240}
             name="value"
+            onChange={updateTextDraft}
             placeholder={roundNumber === 0 ? "Messi haciendo un asado…" : "Un hombre cocinando una vaca…"}
             required
+            value={textDraft}
           />
         </div>
       )}

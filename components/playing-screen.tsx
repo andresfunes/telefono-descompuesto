@@ -111,6 +111,7 @@ export function PlayingScreen({
           entryType={round.expectedEntryType}
           previousDrawingUrl={previousDrawingUrl}
           previousText={previousText}
+          playerId={currentPlayer.id}
           roomCode={game.code}
           roundNumber={round.number}
         />

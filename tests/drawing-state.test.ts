@@ -4,10 +4,12 @@ import {
   appendPoint,
   clearDrawing,
   createStroke,
+  deserializeDrawingDraft,
   EMPTY_DRAWING_HISTORY,
   isDrawingEmpty,
   isTapStroke,
   redoDrawing,
+  serializeDrawingDraft,
   undoDrawing,
 } from "@/components/drawing/drawing-state";
 
@@ -66,5 +68,16 @@ describe("drawing state", () => {
     expect(isDrawingEmpty([eraser])).toBe(true);
     expect(isDrawingEmpty([penStroke("pen")])).toBe(false);
     expect(isDrawingEmpty(clearDrawing(addStroke(EMPTY_DRAWING_HISTORY, penStroke("pen"))).strokes)).toBe(true);
+  });
+
+  it("serializes safe vector drafts and rejects malformed stored data", () => {
+    const strokes = [penStroke("saved")];
+
+    expect(deserializeDrawingDraft(serializeDrawingDraft(strokes))).toEqual(strokes);
+    expect(deserializeDrawingDraft("not-json")).toEqual([]);
+    expect(deserializeDrawingDraft(JSON.stringify({
+      version: 1,
+      strokes: [{ ...strokes[0], points: [Number.NaN, 2, 3, 4] }],
+    }))).toEqual([]);
   });
 });
