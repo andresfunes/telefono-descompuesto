@@ -53,7 +53,26 @@ export function RematchControls({
   }, [rematchCode, showInvitationModal]);
 
   if (rematchCode && !isHost) {
-    if (!showInvitationModal) return null;
+    if (!showInvitationModal) {
+      return (
+        <aside className="mt-8 rounded-[1.5rem] border-2 border-[var(--ink)] bg-[var(--mint)] p-5 shadow-[5px_5px_0_var(--ink)]">
+          <p className="text-sm font-black uppercase tracking-widest">Nueva partida</p>
+          <h3 className="mt-1 text-xl font-black">
+            {hostName} creó la sala {rematchCode}
+          </h3>
+          <p className="mb-4 mt-1 text-sm text-slate-700">
+            Sumate con el mismo nombre: {currentPlayerName}.
+          </p>
+          <form action={joinAction} className="space-y-3">
+            <input name="roomCode" type="hidden" value={roomCode} />
+            {joinState.error && (
+              <p className="text-sm font-semibold text-red-700">{joinState.error}</p>
+            )}
+            <SubmitButton label="Unirme a la nueva partida" pendingLabel="Entrando…" />
+          </form>
+        </aside>
+      );
+    }
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[rgba(18,36,31,0.55)] p-4 backdrop-blur-sm">
