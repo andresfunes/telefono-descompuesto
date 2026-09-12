@@ -58,12 +58,14 @@ export function RevealScreen({
   game,
   drawingUrls,
   canGenerateCommentary,
+  commentaryAvailable,
   initialComments,
   currentPlayerId,
 }: {
   game: Game;
   drawingUrls: Record<string, string>;
   canGenerateCommentary: boolean;
+  commentaryAvailable: boolean;
   initialComments: string[];
   currentPlayerId: string;
 }) {
@@ -88,6 +90,7 @@ export function RevealScreen({
 
       <GameCommentary
         canGenerate={canGenerateCommentary}
+        commentaryAvailable={commentaryAvailable}
         initialComments={initialComments}
         roomCode={game.code}
       />

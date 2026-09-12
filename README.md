@@ -36,11 +36,19 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
 SUPABASE_SECRET_KEY=...
 OPENAI_API_KEY=...
 OPENAI_COMMENTARY_MODEL=gpt-5-mini
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
+TURNSTILE_SECRET_KEY=...
+AI_IP_HASH_SECRET=...
+AI_ENABLED=true
 ```
 
 Localmente, la publishable key puede ser la clave anónima y la secret key puede ser la clave `service_role`. Nunca expongas `SUPABASE_SECRET_KEY` con el prefijo `NEXT_PUBLIC_`.
 
 `OPENAI_COMMENTARY_MODEL` es opcional y usa `gpt-5-mini` por defecto. `OPENAI_API_KEY` se utiliza solo en el servidor; no le agregues el prefijo `NEXT_PUBLIC_`.
+
+Para habilitar comentarios en producción, creá un widget **Turnstile Managed** en Cloudflare, agregá los dominios de producción y preview permitidos y configurá su site key y secret. La verificación usa el modo visual `interaction-only`, por lo que normalmente permanece invisible. Para desarrollo podés permitir `localhost` o usar las claves de prueba oficiales de Turnstile.
+
+La protección usa estos valores predeterminados: 10 intentos por usuario/hora, 20 por IP/hora, 5 por partida y 1000 generaciones globales por día UTC. Los límites se pueden cambiar con las variables `AI_RATE_LIMIT_*` y `AI_DAILY_GLOBAL_LIMIT`. `AI_ENABLED=false` apaga todas las llamadas nuevas a OpenAI sin afectar el reveal. Definí `AI_IP_HASH_SECRET` con un valor aleatorio largo: PostgreSQL guarda solamente un HMAC de la IP, nunca la dirección original.
 
 ```bash
 pnpm supabase:reset
@@ -89,6 +97,8 @@ Los clientes reciben `GAME_CHANGED` por un Broadcast privado `game:<uuid>`. El e
 - Cadenas, entradas y dibujos completos se habilitan directamente solo durante `REVEAL`.
 - Cada mutación compara `games.version` dentro de una transacción; ante conflicto recarga, revalida y reintenta.
 - Los PNG viven en `game-drawings`; durante la partida el servidor firma únicamente el dibujo asignado.
+- Los comentarios requieren Turnstile y una reserva atómica por `game_id`; los límites y el cupo diario viven en tablas privadas de PostgreSQL.
+- Vercel provee la IP mediante `x-vercel-forwarded-for`; fuera de Vercel en producción se usa un bucket conservador sin confiar en headers arbitrarios.
 
 ### Rotación de cadenas
 

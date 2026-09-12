@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   GameRuleError,
@@ -10,15 +11,16 @@ import {
   validatePlayerName,
   type DrawingAsset,
 } from "@/domain/game";
+import { parseHumorIntensity } from "@/domain/game-commentary";
+import { generateGameCommentary } from "@/lib/ai/game-commentary";
+import { trustedClientIp, hashClientIp } from "@/lib/ai/client-ip";
+import { getCommentaryProtectionConfig } from "@/lib/ai/commentary-protection-config";
 import {
-  canGenerateGameCommentary,
-  parseHumorIntensity,
-  type GameCommentaryItem,
-} from "@/domain/game-commentary";
-import {
-  CommentaryConfigurationError,
-  generateGameCommentary,
-} from "@/lib/ai/game-commentary";
+  COMMENTARY_UNAVAILABLE_MESSAGE,
+  generateProtectedGameCommentary,
+} from "@/lib/ai/protected-game-commentary";
+import { logAiGeneration } from "@/lib/ai/generation-log";
+import { verifyTurnstileToken } from "@/lib/ai/turnstile";
 import { resolveRevealDrawingAnalysisInputs } from "@/lib/game-view";
 import { decodePngDataUrl } from "@/lib/png-data-url";
 import {
@@ -44,6 +46,7 @@ export interface FormState {
 export interface CommentaryFormState {
   error?: string;
   comments?: string[];
+  analytics?: "generated" | "unavailable";
 }
 
 function expectedErrorMessage(error: unknown): string | null {
@@ -272,36 +275,61 @@ export async function generateCommentary(
 
   const authUserId = await getAuthenticatedUserId();
   if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
-  const game = await gameRepository.getRoom(code);
-  if (!game) return { error: "La sala no existe." };
-  const player = await gameRepository.getPlayerForUser(code, authUserId);
+  const roomSession = await gameRepository.getRoomSession(code, authUserId);
+  if (!roomSession) return { error: "La sala no existe." };
+  const { game, player } = roomSession;
   if (!player) return { error: "No pertenecés a esta sala." };
-  if (!canGenerateGameCommentary(game, player.id)) {
-    return { error: "Solo quien creó la partida puede generar los comentarios." };
-  }
-  if (game.phase !== "REVEAL" && game.phase !== "FINISHED") {
-    return { error: "Los comentarios se habilitan cuando termina la partida." };
-  }
 
   try {
-    const drawingUrls = await resolveRevealDrawingAnalysisInputs(game);
+    const config = getCommentaryProtectionConfig();
+    const requestHeaders = await headers();
+    const remoteIp = trustedClientIp(requestHeaders);
     const intensity = parseHumorIntensity(formData.get("intensity"));
-    const comments: GameCommentaryItem[] = await generateGameCommentary(
-      game,
-      drawingUrls,
-      intensity,
+    const result = await generateProtectedGameCommentary(
+      {
+        game,
+        playerId: player.id,
+        authUserId,
+        ipHash: hashClientIp(remoteIp),
+        remoteIp,
+        turnstileToken: String(formData.get("turnstileToken") ?? ""),
+        intensity,
+        config,
+      },
+      {
+        store: gameCommentaryStore,
+        verifyTurnstile: (token, ip) =>
+          verifyTurnstileToken({
+            token,
+            remoteIp: ip,
+            secretKey: config.turnstileSecretKey ?? "",
+          }),
+        generate: async (persistedGame, selectedIntensity) => {
+          const drawingUrls =
+            await resolveRevealDrawingAnalysisInputs(persistedGame);
+          return generateGameCommentary(
+            persistedGame,
+            drawingUrls,
+            selectedIntensity,
+          );
+        },
+      },
     );
-    await gameCommentaryStore.save({
-      gameId: game.id,
-      authUserId,
-      comments,
-      intensity,
-    });
+
+    if (result.status === "unavailable") {
+      return { error: COMMENTARY_UNAVAILABLE_MESSAGE, analytics: "unavailable" };
+    }
     revalidatePath(`/${code}`);
-    return { comments: comments.map((comment) => comment.text) };
+    return {
+      comments: result.commentary.comments,
+      analytics: result.status === "generated" ? "generated" : undefined,
+    };
   } catch (error) {
-    if (error instanceof CommentaryConfigurationError) return { error: error.message };
-    console.error("No se pudieron generar los comentarios de la partida", error);
-    return { error: "No pudimos generar los comentarios. Probá de nuevo en un momento." };
+    logAiGeneration("ai_generation_protection_failed", {
+      gameId: game.id,
+      chainIds: game.chains.map(({ id }) => id),
+      reason: error instanceof Error ? error.name : "unknown",
+    });
+    return { error: COMMENTARY_UNAVAILABLE_MESSAGE, analytics: "unavailable" };
   }
 }

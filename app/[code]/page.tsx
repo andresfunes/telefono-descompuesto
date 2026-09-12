@@ -7,6 +7,7 @@ import { PlayingScreen } from "@/components/playing-screen";
 import { RevealScreen } from "@/components/reveal-screen";
 import { isValidRoomCode, normalizeRoomCode } from "@/domain/game";
 import { canGenerateGameCommentary } from "@/domain/game-commentary";
+import { getCommentaryProtectionConfig } from "@/lib/ai/commentary-protection-config";
 import { resolveVisibleDrawingUrls } from "@/lib/game-view";
 import { getAuthenticatedUserId } from "@/lib/supabase/auth";
 import { gameCommentaryStore, gameRepository } from "@/repositories";
@@ -47,6 +48,12 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
   }
 
   const drawingUrls = await resolveVisibleDrawingUrls(game, currentPlayer.id);
+  const commentaryConfig = getCommentaryProtectionConfig();
+  const commentaryAvailable = Boolean(
+    commentaryConfig.enabled &&
+      commentaryConfig.turnstileSecretKey &&
+      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
+  );
   const savedCommentary =
     game.phase === "REVEAL" || game.phase === "FINISHED"
       ? await gameCommentaryStore.getByRoomCode(code)
@@ -86,6 +93,7 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
         {(game.phase === "REVEAL" || game.phase === "FINISHED") && (
           <RevealScreen
             canGenerateCommentary={canGenerateGameCommentary(game, currentPlayer.id)}
+            commentaryAvailable={commentaryAvailable}
             currentPlayerId={currentPlayer.id}
             initialComments={savedCommentary?.comments ?? []}
             drawingUrls={drawingUrls}

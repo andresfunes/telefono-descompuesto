@@ -132,7 +132,7 @@ export async function generateGameCommentary(
     );
   }
 
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, maxRetries: 0, timeout: 45_000 });
   const model = process.env.OPENAI_COMMENTARY_MODEL ?? DEFAULT_COMMENTARY_MODEL;
   const input = [{ role: "user" as const, content: buildCommentaryInput(game, drawingUrls, intensity) }];
 

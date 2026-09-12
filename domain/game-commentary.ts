@@ -56,6 +56,39 @@ export function canGenerateGameCommentary(game: Game, playerId: string): boolean
   return game.hostPlayerId === playerId;
 }
 
+export type CommentaryEligibilityFailure =
+  | "NOT_MEMBER"
+  | "NOT_HOST"
+  | "NOT_REVEAL"
+  | "INCOMPLETE_GAME";
+
+export function commentaryEligibility(
+  game: Game,
+  playerId: string,
+): CommentaryEligibilityFailure | null {
+  if (!game.players.some((player) => player.id === playerId)) return "NOT_MEMBER";
+  if (!canGenerateGameCommentary(game, playerId)) return "NOT_HOST";
+  if (game.phase !== "REVEAL") return "NOT_REVEAL";
+  if (
+    game.chains.length !== game.players.length ||
+    game.chains.some(
+      (chain) =>
+        chain.entries.length !== game.players.length ||
+        new Set(chain.entries.map((entry) => entry.roundNumber)).size !==
+          game.players.length ||
+        new Set(chain.entries.map((entry) => entry.playerId)).size !==
+          game.players.length ||
+        chain.entries.some(
+          (entry) =>
+            entry.roundNumber < 0 || entry.roundNumber >= game.players.length,
+        ),
+    )
+  ) {
+    return "INCOMPLETE_GAME";
+  }
+  return null;
+}
+
 export function buildCommentaryTranscript(game: Game): string {
   const playerNames = new Map(game.players.map((player) => [player.id, player.name]));
   const chains = revealChains(game).map((chain, chainIndex) => ({

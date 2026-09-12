@@ -1,20 +1,22 @@
 "use client";
 
-import { useActionState } from "react";
+import { track } from "@vercel/analytics";
+import { useActionState, useCallback, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
   generateCommentary,
   type CommentaryFormState,
 } from "@/app/actions";
+import { TurnstileWidget } from "./turnstile-widget";
 
 const initialState: CommentaryFormState = {};
 
-function GenerateButton() {
+function GenerateButton({ verified }: { verified: boolean }) {
   const { pending } = useFormStatus();
   return (
     <button
       className="min-h-12 w-full rounded-2xl bg-[var(--ink)] px-5 py-3 font-bold text-white shadow-[0_5px_0_#ff6b4a] transition active:translate-y-1 active:shadow-none disabled:opacity-60"
-      disabled={pending}
+      disabled={pending || !verified}
       type="submit"
     >
       {pending ? "Preparando el veredicto…" : "Generar comentarios con IA"}
@@ -25,14 +27,23 @@ function GenerateButton() {
 export function GameCommentary({
   roomCode,
   canGenerate,
+  commentaryAvailable,
   initialComments,
 }: {
   roomCode: string;
   canGenerate: boolean;
+  commentaryAvailable: boolean;
   initialComments: string[];
 }) {
   const [state, action] = useActionState(generateCommentary, initialState);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const handleToken = useCallback((token: string) => setTurnstileToken(token), []);
   const comments = state.comments ?? initialComments;
+
+  useEffect(() => {
+    if (state.analytics === "generated") track("ai_commentary_generated");
+    if (state.analytics === "unavailable") track("ai_commentary_unavailable");
+  }, [state.analytics]);
 
   return (
     <aside className="mb-8 rounded-[1.5rem] border-2 border-[var(--ink)] bg-[var(--mint)]/60 p-5">
@@ -45,9 +56,18 @@ export function GameCommentary({
             </li>
           ))}
         </ul>
-      ) : canGenerate ? (
+      ) : !canGenerate ? (
+        <p className="mt-3 text-sm font-semibold text-slate-600">
+          Solo quien creó la partida puede generar los comentarios.
+        </p>
+      ) : !commentaryAvailable ? (
+        <p className="mt-3 text-sm font-semibold text-slate-600">
+          Los comentarios automáticos no están disponibles en este momento.
+        </p>
+      ) : (
         <form action={action} className="mt-4 space-y-3">
           <input name="roomCode" type="hidden" value={roomCode} />
+          <input name="turnstileToken" type="hidden" value={turnstileToken} />
           <label className="block text-sm font-bold" htmlFor="humor-intensity">
             Intensidad del humor
           </label>
@@ -64,13 +84,10 @@ export function GameCommentary({
           <p className="text-xs text-slate-600">
             Al generarlos, los nombres, textos y dibujos de esta partida se envían a OpenAI.
           </p>
+          <TurnstileWidget onToken={handleToken} resetSignal={state} />
           {state.error && <p className="text-sm font-semibold text-red-700">{state.error}</p>}
-          <GenerateButton />
+          <GenerateButton verified={Boolean(turnstileToken)} />
         </form>
-      ) : (
-        <p className="mt-3 text-sm font-semibold text-slate-600">
-          Solo quien creó la partida puede generar los comentarios.
-        </p>
       )}
     </aside>
   );
