@@ -1,7 +1,5 @@
 import "server-only";
 
-import { TURNSTILE_COMMENTARY_ACTION } from "./turnstile-action";
-
 const SITEVERIFY_URL =
   "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
@@ -15,6 +13,7 @@ export interface TurnstileVerificationInput {
   token: string;
   secretKey: string;
   remoteIp: string | null;
+  expectedAction: string;
   fetchImpl?: typeof fetch;
 }
 
@@ -22,6 +21,7 @@ export async function verifyTurnstileToken({
   token,
   secretKey,
   remoteIp,
+  expectedAction,
   fetchImpl = fetch,
 }: TurnstileVerificationInput): Promise<boolean> {
   const normalizedToken = token.trim();
@@ -42,7 +42,7 @@ export async function verifyTurnstileToken({
     });
     if (!response.ok) return false;
     const result = (await response.json()) as SiteverifyResponse;
-    return result.success === true && result.action === TURNSTILE_COMMENTARY_ACTION;
+    return result.success === true && result.action === expectedAction;
   } catch {
     return false;
   }

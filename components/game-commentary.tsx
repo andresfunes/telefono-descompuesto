@@ -8,6 +8,7 @@ import {
   type CommentaryFormState,
 } from "@/app/actions";
 import { TurnstileWidget } from "./turnstile-widget";
+import { TURNSTILE_COMMENTARY_ACTION } from "@/lib/ai/turnstile-action";
 
 const initialState: CommentaryFormState = {};
 
@@ -84,7 +85,12 @@ export function GameCommentary({
           <p className="text-xs text-slate-600">
             Al generarlos, los nombres, textos y dibujos de esta partida se envían a OpenAI.
           </p>
-          <TurnstileWidget onToken={handleToken} resetSignal={state} />
+          <TurnstileWidget
+            action={TURNSTILE_COMMENTARY_ACTION}
+            onToken={handleToken}
+            resetSignal={state}
+            unavailableMessage="Los comentarios automáticos no están disponibles en este momento."
+          />
           {state.error && <p className="text-sm font-semibold text-red-700">{state.error}</p>}
           <GenerateButton verified={Boolean(turnstileToken)} />
         </form>

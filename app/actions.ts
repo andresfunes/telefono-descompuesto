@@ -21,6 +21,10 @@ import {
 } from "@/lib/ai/protected-game-commentary";
 import { logAiGeneration } from "@/lib/ai/generation-log";
 import { verifyTurnstileToken } from "@/lib/ai/turnstile";
+import {
+  TURNSTILE_COMMENTARY_ACTION,
+  TURNSTILE_JOIN_ACTION,
+} from "@/lib/ai/turnstile-action";
 import { resolveRevealDrawingAnalysisInputs } from "@/lib/game-view";
 import { decodePngDataUrl } from "@/lib/png-data-url";
 import {
@@ -34,6 +38,8 @@ import {
 } from "@/repositories";
 import {
   ConcurrentGameUpdateError,
+  JoinChallengeRequiredError,
+  JoinRateLimitedError,
   PlayerNameTakenError,
   RoomNotFoundError,
   UnauthorizedGameActionError,
@@ -41,6 +47,7 @@ import {
 
 export interface FormState {
   error?: string;
+  challengeRequired?: boolean;
 }
 
 export interface CommentaryFormState {
@@ -58,6 +65,8 @@ function expectedErrorMessage(error: unknown): string | null {
     PlayerNameTakenError.name,
     UnauthorizedGameActionError.name,
     ConcurrentGameUpdateError.name,
+    JoinChallengeRequiredError.name,
+    JoinRateLimitedError.name,
   ]);
   if (
     typeof candidate.name === "string" &&
@@ -95,14 +104,92 @@ export async function joinGame(
 
   try {
     const authUserId = await ensureAnonymousUserId();
-    await gameRepository.joinRoom(code, playerName, authUserId);
+    const requestHeaders = await headers();
+    const remoteIp = trustedClientIp(requestHeaders);
+    const turnstileToken = String(formData.get("turnstileToken") ?? "");
+    const turnstileSecretKey = process.env.TURNSTILE_SECRET_KEY?.trim();
+    const challengeVerified = Boolean(
+      turnstileSecretKey &&
+        turnstileToken &&
+        (await verifyTurnstileToken({
+          token: turnstileToken,
+          remoteIp,
+          secretKey: turnstileSecretKey,
+          expectedAction: TURNSTILE_JOIN_ACTION,
+        })),
+    );
+    await gameRepository.joinRoom(code, playerName, authUserId, {
+      ipHash: hashClientIp(remoteIp),
+      challengeVerified,
+    });
   } catch (error) {
+    if (error instanceof JoinChallengeRequiredError) {
+      return {
+        error: "Completá la verificación para seguir.",
+        challengeRequired: true,
+      };
+    }
+    if (
+      error instanceof RoomNotFoundError ||
+      (error instanceof GameRuleError && error.code === "GAME_ALREADY_STARTED")
+    ) {
+      return { error: "No pudimos entrar a esa sala. Revisá el código e intentá de nuevo." };
+    }
     const message = expectedErrorMessage(error);
     if (message) return { error: message };
     throw error;
   }
 
   redirect(`/${code}`);
+}
+
+export async function setRoomLock(
+  _previousState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const code = normalizeRoomCode(String(formData.get("roomCode") ?? ""));
+  const locked = String(formData.get("locked") ?? "") === "true";
+  if (!isValidRoomCode(code)) return { error: "El código de sala no es válido." };
+
+  const authUserId = await getAuthenticatedUserId();
+  if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
+  const player = await gameRepository.getPlayerForUser(code, authUserId);
+  if (!player) return { error: "No pertenecés a esta sala." };
+
+  try {
+    await gameRepository.setLobbyLocked(code, player.id, authUserId, locked);
+  } catch (error) {
+    const message = expectedErrorMessage(error);
+    if (message) return { error: message };
+    throw error;
+  }
+  revalidatePath(`/${code}`);
+  return {};
+}
+
+export async function removeRoomPlayer(
+  _previousState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const code = normalizeRoomCode(String(formData.get("roomCode") ?? ""));
+  const playerId = String(formData.get("playerId") ?? "");
+  if (!isValidRoomCode(code)) return { error: "El código de sala no es válido." };
+  if (!playerId) return { error: "El jugador no es válido." };
+
+  const authUserId = await getAuthenticatedUserId();
+  if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
+  const player = await gameRepository.getPlayerForUser(code, authUserId);
+  if (!player) return { error: "No pertenecés a esta sala." };
+
+  try {
+    await gameRepository.removePlayer(code, player.id, authUserId, playerId);
+  } catch (error) {
+    const message = expectedErrorMessage(error);
+    if (message) return { error: message };
+    throw error;
+  }
+  revalidatePath(`/${code}`);
+  return {};
 }
 
 export async function createRematch(
@@ -140,12 +227,10 @@ export async function joinRematch(
 
   const authUserId = await getAuthenticatedUserId();
   if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
-  const [sourceGame, sourcePlayer] = await Promise.all([
-    gameRepository.getRoom(sourceCode),
-    gameRepository.getPlayerForUser(sourceCode, authUserId),
-  ]);
-  if (!sourceGame) return { error: "La sala no existe." };
-  if (!sourcePlayer) return { error: "No pertenecés a esta sala." };
+  const sourcePlayer = await gameRepository.getPlayerForUser(sourceCode, authUserId);
+  if (!sourcePlayer) return { error: "No pudimos continuar con esa sala." };
+  const sourceGame = await gameRepository.getRoom(sourceCode);
+  if (!sourceGame) return { error: "No pudimos continuar con esa sala." };
   if (!sourceGame.rematchCode) return { error: "Todavía no se creó una nueva partida." };
 
   try {
@@ -206,10 +291,10 @@ export async function submitTurn(
 
   const authUserId = await getAuthenticatedUserId();
   if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
-  const game = await gameRepository.getRoom(code);
-  if (!game) return { error: "La sala no existe." };
   const player = await gameRepository.getPlayerForUser(code, authUserId);
-  if (!player) return { error: "No pertenecés a esta sala." };
+  if (!player) return { error: "No pudimos continuar con esa sala." };
+  const game = await gameRepository.getRoom(code);
+  if (!game) return { error: "No pudimos continuar con esa sala." };
 
   let storedDrawing: DrawingAsset | undefined;
   try {
@@ -300,6 +385,7 @@ export async function generateCommentary(
         store: gameCommentaryStore,
         verifyTurnstile: (token, ip) =>
           verifyTurnstileToken({
+            expectedAction: TURNSTILE_COMMENTARY_ACTION,
             token,
             remoteIp: ip,
             secretKey: config.turnstileSecretKey ?? "",

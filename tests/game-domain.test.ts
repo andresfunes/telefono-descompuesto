@@ -6,10 +6,15 @@ import {
   createLobbyGame,
   expectedEntryTypeForRound,
   GameRuleError,
+  generateRoomCode,
   groupPlayersByRoundStatus,
+  isLobbyExpired,
   isCurrentRoundComplete,
+  MAXIMUM_PLAYER_COUNT,
+  removePlayerFromLobby,
   revealChains,
   startGame,
+  setLobbyLocked,
   submitEntry,
   submitEntryAndAdvance,
   type EntryContent,
@@ -29,6 +34,7 @@ function lobby(playerCount: number): Game {
   const gamePlayers = players(playerCount);
   return {
     ...createLobbyGame("ABCD", new Date(0)),
+    lobbyExpiresAt: new Date("2100-01-01T00:00:00Z"),
     hostPlayerId: gamePlayers[0]?.id ?? null,
     players: gamePlayers,
   };
@@ -63,6 +69,11 @@ function playCompleteGame(playerCount: number): Game {
 }
 
 describe("game start", () => {
+  it("generates six-character room codes", () => {
+    const code = generateRoomCode();
+    expect(code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
+  });
+
   it("creates one chain per player and starts the initial text round", () => {
     const game = startGame(lobby(3), "p0");
 
@@ -94,6 +105,34 @@ describe("game start", () => {
     const started = startGame(lobby(2), "p0");
     expect(() => startGame(started, "p0")).toThrowError(
       expect.objectContaining({ code: "GAME_ALREADY_STARTED" }),
+    );
+  });
+
+  it("rejects expired and oversized lobbies", () => {
+    const expired = { ...lobby(2), lobbyExpiresAt: new Date(0) };
+    expect(isLobbyExpired(expired, new Date(1))).toBe(true);
+    expect(() => startGame(expired, "p0", new Date(1))).toThrowError(
+      expect.objectContaining({ code: "LOBBY_EXPIRED" }),
+    );
+    expect(() => startGame(lobby(MAXIMUM_PLAYER_COUNT + 1), "p0")).toThrowError(
+      expect.objectContaining({ code: "TOO_MANY_PLAYERS" }),
+    );
+  });
+});
+
+describe("lobby moderation", () => {
+  it("lets only the host lock the room and remove another player", () => {
+    const game = lobby(3);
+    const locked = setLobbyLocked(game, "p0", true);
+    expect(locked.lobbyLocked).toBe(true);
+    expect(() => setLobbyLocked(game, "p1", true)).toThrowError(
+      expect.objectContaining({ code: "NOT_HOST" }),
+    );
+
+    const moderated = removePlayerFromLobby(game, "p0", "p2");
+    expect(moderated.players.map((player) => player.id)).toEqual(["p0", "p1"]);
+    expect(() => removePlayerFromLobby(game, "p0", "p0")).toThrowError(
+      expect.objectContaining({ code: "NOT_HOST" }),
     );
   });
 });

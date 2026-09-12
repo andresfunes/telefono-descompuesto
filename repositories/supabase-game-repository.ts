@@ -15,10 +15,13 @@ import {
 } from "@/domain/game";
 import {
   ConcurrentGameUpdateError,
+  JoinChallengeRequiredError,
+  JoinRateLimitedError,
   PlayerNameTakenError,
   RoomNotFoundError,
   UnauthorizedGameActionError,
   type GameRepository,
+  type JoinProtectionContext,
   type RoomSession,
 } from "./game-repository";
 
@@ -34,10 +37,25 @@ type GameChangeKind =
 export interface GameSnapshotGateway {
   createGameWithHost(code: string, authUserId: string, playerName: string): Promise<void>;
   createRematch(sourceCode: string, authUserId: string, newCode: string): Promise<string>;
-  joinGame(code: string, authUserId: string, playerName: string): Promise<void>;
+  joinGame(
+    code: string,
+    authUserId: string,
+    playerName: string,
+    protection: JoinProtectionContext,
+  ): Promise<JoinGameGatewayResult>;
   loadGame(code: string): Promise<unknown | null>;
+  loadGameForUser(code: string, authUserId: string): Promise<unknown | null>;
+  setLobbyLocked(code: string, authUserId: string, locked: boolean): Promise<void>;
+  removePlayer(code: string, authUserId: string, playerId: string): Promise<void>;
   commitGame(input: PersistedGameCommit): Promise<boolean>;
 }
+
+export type JoinGameGatewayResult =
+  | "joined"
+  | "unavailable"
+  | "name_taken"
+  | "challenge_required"
+  | "rate_limited";
 
 export interface PersistedGameCommit {
   game: Game;
@@ -234,6 +252,8 @@ export function deserializeGameSnapshot(value: unknown): LoadedGame {
       chains,
       currentRound,
       rematchCode: nullableStringField(gameRow, "rematch_code"),
+      lobbyLocked: gameRow.lobby_locked === true,
+      lobbyExpiresAt: dateField(gameRow, "lobby_expires_at"),
     },
     version: integerField(gameRow, "version"),
     playerIdByAuthUserId,
@@ -290,16 +310,18 @@ function isCodeCollision(error: unknown): boolean {
   );
 }
 
-function mapJoinError(error: unknown): Error {
-  const message = hasMessage(error) ? error.message : "";
-  if (message.includes("ROOM_NOT_FOUND")) return new RoomNotFoundError("La sala no existe.");
-  if (message.includes("GAME_ALREADY_STARTED")) {
-    return new GameRuleError("GAME_ALREADY_STARTED", "La partida ya comenzó.");
-  }
-  if (message.includes("PLAYER_NAME_TAKEN") || isCodeCollision(error)) {
+function mapJoinResult(result: JoinGameGatewayResult): Error | null {
+  if (result === "joined") return null;
+  if (result === "name_taken") {
     return new PlayerNameTakenError("Ese nombre ya está en uso en la sala.");
   }
-  return rpcFailure(error);
+  if (result === "challenge_required") {
+    return new JoinChallengeRequiredError("Necesitamos verificar que seas humano.");
+  }
+  if (result === "rate_limited") {
+    return new JoinRateLimitedError("Demasiados intentos. Esperá unos minutos y probá de nuevo.");
+  }
+  return new RoomNotFoundError("No pudimos entrar a esa sala.");
 }
 
 export class SupabaseGameRepository implements GameRepository {
@@ -390,18 +412,25 @@ export class SupabaseGameRepository implements GameRepository {
     code: string,
     authUserId: string | null,
   ): Promise<RoomSession | null> {
-    const loaded = await this.load(code);
+    if (!authUserId) return null;
+    const snapshot = await this.gateway.loadGameForUser(
+      normalizeRoomCode(code),
+      authUserId,
+    );
+    const loaded = snapshot ? deserializeGameSnapshot(snapshot) : null;
     if (!loaded) return null;
 
-    const playerId = authUserId
-      ? loaded.playerIdByAuthUserId.get(authUserId)
-      : undefined;
+    const playerId = loaded.playerIdByAuthUserId.get(authUserId);
     const player = loaded.game.players.find((candidate) => candidate.id === playerId) ?? null;
     return { game: loaded.game, player };
   }
 
   async getPlayerForUser(code: string, authUserId: string): Promise<Player | null> {
-    const loaded = await this.load(code);
+    const snapshot = await this.gateway.loadGameForUser(
+      normalizeRoomCode(code),
+      authUserId,
+    );
+    const loaded = snapshot ? deserializeGameSnapshot(snapshot) : null;
     const playerId = loaded?.playerIdByAuthUserId.get(authUserId);
     return loaded?.game.players.find((player) => player.id === playerId) ?? null;
   }
@@ -410,12 +439,31 @@ export class SupabaseGameRepository implements GameRepository {
     code: string,
     playerName: string,
     authUserId: string,
+    protection: JoinProtectionContext = {
+      ipHash: "unavailable",
+      challengeVerified: false,
+    },
   ): Promise<{ game: Game; player: Player }> {
     const normalizedCode = normalizeRoomCode(code);
     try {
-      await this.gateway.joinGame(normalizedCode, authUserId, normalizePlayerName(playerName));
+      const result = await this.gateway.joinGame(
+        normalizedCode,
+        authUserId,
+        normalizePlayerName(playerName),
+        protection,
+      );
+      const mapped = mapJoinResult(result);
+      if (mapped) throw mapped;
     } catch (error) {
-      throw mapJoinError(error);
+      if (
+        error instanceof RoomNotFoundError ||
+        error instanceof PlayerNameTakenError ||
+        error instanceof JoinChallengeRequiredError ||
+        error instanceof JoinRateLimitedError
+      ) {
+        throw error;
+      }
+      throw rpcFailure(error);
     }
 
     const loaded = await this.load(normalizedCode);
@@ -423,6 +471,50 @@ export class SupabaseGameRepository implements GameRepository {
     const player = loaded?.game.players.find((candidate) => candidate.id === playerId);
     if (!loaded || !player) throw new Error("No se pudo reconstruir la membresía.");
     return { game: loaded.game, player };
+  }
+
+  async setLobbyLocked(
+    code: string,
+    requestedByPlayerId: string,
+    authUserId: string,
+    locked: boolean,
+  ): Promise<Game> {
+    const normalizedCode = normalizeRoomCode(code);
+    const loaded = await this.load(normalizedCode);
+    if (!loaded) throw new RoomNotFoundError("La sala no existe.");
+    if (loaded.playerIdByAuthUserId.get(authUserId) !== requestedByPlayerId) {
+      throw new UnauthorizedGameActionError("No podés modificar a otro jugador.");
+    }
+    try {
+      await this.gateway.setLobbyLocked(normalizedCode, authUserId, locked);
+    } catch (error) {
+      throw rpcFailure(error);
+    }
+    const updated = await this.load(normalizedCode);
+    if (!updated) throw new RoomNotFoundError("La sala no existe.");
+    return updated.game;
+  }
+
+  async removePlayer(
+    code: string,
+    requestedByPlayerId: string,
+    authUserId: string,
+    playerId: string,
+  ): Promise<Game> {
+    const normalizedCode = normalizeRoomCode(code);
+    const loaded = await this.load(normalizedCode);
+    if (!loaded) throw new RoomNotFoundError("La sala no existe.");
+    if (loaded.playerIdByAuthUserId.get(authUserId) !== requestedByPlayerId) {
+      throw new UnauthorizedGameActionError("No podés modificar a otro jugador.");
+    }
+    try {
+      await this.gateway.removePlayer(normalizedCode, authUserId, playerId);
+    } catch (error) {
+      throw rpcFailure(error);
+    }
+    const updated = await this.load(normalizedCode);
+    if (!updated) throw new RoomNotFoundError("La sala no existe.");
+    return updated.game;
   }
 
   private async authoritativeMutation(

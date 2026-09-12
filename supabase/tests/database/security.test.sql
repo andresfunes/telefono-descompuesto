@@ -63,7 +63,7 @@ select results_eq(
     where namespace.nspname in ('public', 'private')
       and procedure.prosecdef
       and 'search_path=""' = any(procedure.proconfig)$$,
-  array[14::bigint],
+  array[17::bigint],
   'every application SECURITY DEFINER function has an empty search_path'
 );
 select results_eq(

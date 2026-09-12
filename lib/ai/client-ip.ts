@@ -26,6 +26,7 @@ export function trustedClientIp(
 
 export function hashClientIp(ip: string | null): string {
   const secret =
+    process.env.ABUSE_IP_HASH_SECRET?.trim() ||
     process.env.AI_IP_HASH_SECRET?.trim() ||
     process.env.TURNSTILE_SECRET_KEY?.trim();
   if (!secret) return "unavailable";

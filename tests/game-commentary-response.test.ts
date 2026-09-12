@@ -14,6 +14,8 @@ const game: Game = {
   hostPlayerId: "p1",
   currentRound: null,
   rematchCode: null,
+  lobbyLocked: false,
+  lobbyExpiresAt: new Date("2026-01-01T02:00:00Z"),
   players: [{ id: "p1", name: "Andrés", joinedAt: new Date("2026-01-01T00:00:00Z") }],
   chains: [{
     id: "chain-1",

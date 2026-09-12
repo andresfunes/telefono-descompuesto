@@ -1,5 +1,7 @@
-export const ROOM_CODE_LENGTH = 4;
+export const ROOM_CODE_LENGTH = 6;
 export const MINIMUM_PLAYER_COUNT = 2;
+export const MAXIMUM_PLAYER_COUNT = 12;
+export const LOBBY_DURATION_MS = 2 * 60 * 60 * 1_000;
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export type GamePhase = "LOBBY" | "PLAYING" | "REVEAL" | "FINISHED";
@@ -78,6 +80,8 @@ export interface Game {
   chains: Chain[];
   currentRound: Round | null;
   rematchCode: string | null;
+  lobbyLocked: boolean;
+  lobbyExpiresAt: Date;
 }
 
 export interface SubmitEntryCommand {
@@ -90,6 +94,8 @@ export interface SubmitEntryCommand {
 export type GameRuleErrorCode =
   | "NOT_HOST"
   | "TOO_FEW_PLAYERS"
+  | "TOO_MANY_PLAYERS"
+  | "LOBBY_EXPIRED"
   | "GAME_ALREADY_STARTED"
   | "GAME_NOT_PLAYING"
   | "GAME_NOT_FINISHED"
@@ -116,7 +122,9 @@ export function normalizeRoomCode(value: string): string {
 }
 
 export function isValidRoomCode(value: string): boolean {
-  return new RegExp(`^[${ROOM_ALPHABET}]{${ROOM_CODE_LENGTH}}$`).test(
+  // Four-character codes remain readable for completed rooms created before
+  // the six-character rollout. Every newly generated code has six characters.
+  return new RegExp(`^(?:[${ROOM_ALPHABET}]{4}|[${ROOM_ALPHABET}]{${ROOM_CODE_LENGTH}})$`).test(
     normalizeRoomCode(value),
   );
 }
@@ -132,9 +140,20 @@ export function validatePlayerName(value: string): string | null {
   return null;
 }
 
-export function generateRoomCode(random: () => number = Math.random): string {
+function secureRandomIndex(maxExclusive: number): number {
+  const values = new Uint8Array(1);
+  const unbiasedLimit = Math.floor(256 / maxExclusive) * maxExclusive;
+  let value: number;
+  do {
+    crypto.getRandomValues(values);
+    value = values[0] ?? 0;
+  } while (value >= unbiasedLimit);
+  return value % maxExclusive;
+}
+
+export function generateRoomCode(): string {
   return Array.from({ length: ROOM_CODE_LENGTH }, () =>
-    ROOM_ALPHABET.charAt(Math.floor(random() * ROOM_ALPHABET.length)),
+    ROOM_ALPHABET.charAt(secureRandomIndex(ROOM_ALPHABET.length)),
   ).join("");
 }
 
@@ -153,7 +172,55 @@ export function createLobbyGame(
     chains: [],
     currentRound: null,
     rematchCode: null,
+    lobbyLocked: false,
+    lobbyExpiresAt: new Date(createdAt.getTime() + LOBBY_DURATION_MS),
   };
+}
+
+export function isLobbyExpired(game: Game, now = new Date()): boolean {
+  return game.phase === "LOBBY" && game.lobbyExpiresAt.getTime() <= now.getTime();
+}
+
+export function setLobbyLocked(
+  game: Game,
+  requestedByPlayerId: string,
+  locked: boolean,
+  now = new Date(),
+): Game {
+  if (game.phase !== "LOBBY") {
+    throw new GameRuleError("GAME_ALREADY_STARTED", "La partida ya comenzó.");
+  }
+  if (game.hostPlayerId !== requestedByPlayerId) {
+    throw new GameRuleError("NOT_HOST", "Solo quien creó la sala puede bloquearla.");
+  }
+  if (isLobbyExpired(game, now)) {
+    throw new GameRuleError("LOBBY_EXPIRED", "La sala venció.");
+  }
+  return { ...game, lobbyLocked: locked };
+}
+
+export function removePlayerFromLobby(
+  game: Game,
+  requestedByPlayerId: string,
+  playerId: string,
+  now = new Date(),
+): Game {
+  if (game.phase !== "LOBBY") {
+    throw new GameRuleError("GAME_ALREADY_STARTED", "La partida ya comenzó.");
+  }
+  if (game.hostPlayerId !== requestedByPlayerId) {
+    throw new GameRuleError("NOT_HOST", "Solo quien creó la sala puede quitar jugadores.");
+  }
+  if (playerId === game.hostPlayerId) {
+    throw new GameRuleError("NOT_HOST", "El anfitrión no puede quitarse de la sala.");
+  }
+  if (isLobbyExpired(game, now)) {
+    throw new GameRuleError("LOBBY_EXPIRED", "La sala venció.");
+  }
+  if (!game.players.some((player) => player.id === playerId)) {
+    throw new GameRuleError("PLAYER_NOT_FOUND", "El jugador no pertenece a la sala.");
+  }
+  return { ...game, players: game.players.filter((player) => player.id !== playerId) };
 }
 
 export function addRematch(
@@ -191,7 +258,11 @@ export function createInitialChains(players: readonly Player[]): Chain[] {
   }));
 }
 
-export function startGame(game: Game, requestedByPlayerId: string): Game {
+export function startGame(
+  game: Game,
+  requestedByPlayerId: string,
+  now = new Date(),
+): Game {
   if (game.phase !== "LOBBY") {
     throw new GameRuleError("GAME_ALREADY_STARTED", "La partida ya comenzó.");
   }
@@ -203,6 +274,15 @@ export function startGame(game: Game, requestedByPlayerId: string): Game {
       "TOO_FEW_PLAYERS",
       `Se necesitan al menos ${MINIMUM_PLAYER_COUNT} jugadores.`,
     );
+  }
+  if (game.players.length > MAXIMUM_PLAYER_COUNT) {
+    throw new GameRuleError(
+      "TOO_MANY_PLAYERS",
+      `La sala admite hasta ${MAXIMUM_PLAYER_COUNT} jugadores.`,
+    );
+  }
+  if (isLobbyExpired(game, now)) {
+    throw new GameRuleError("LOBBY_EXPIRED", "La sala venció. Creá una nueva partida.");
   }
 
   return {

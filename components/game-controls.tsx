@@ -4,7 +4,13 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
 import { useFormStatus } from "react-dom";
-import { startRoomGame, submitTurn, type FormState } from "@/app/actions";
+import {
+  removeRoomPlayer,
+  setRoomLock,
+  startRoomGame,
+  submitTurn,
+  type FormState,
+} from "@/app/actions";
 import type { PlayableEntryType } from "@/domain/game";
 import { GAME_ACTION_PENDING_EVENT } from "@/lib/game-client-events";
 import type { DrawingCanvasHandle } from "./drawing/drawing-canvas";
@@ -77,6 +83,50 @@ export function StartGameForm({
         idleLabel="Comenzar partida"
         pendingLabel="Comenzando…"
       />
+    </form>
+  );
+}
+
+export function LobbyLockForm({ roomCode, locked }: { roomCode: string; locked: boolean }) {
+  const [state, action] = useActionState(setRoomLock, initialState);
+  return (
+    <form action={action} className="space-y-2">
+      <input name="roomCode" type="hidden" value={roomCode} />
+      <input name="locked" type="hidden" value={String(!locked)} />
+      <ActionButton
+        idleLabel={locked ? "Desbloquear sala" : "Bloquear sala"}
+        pendingLabel={locked ? "Desbloqueando…" : "Bloqueando…"}
+      />
+      {state.error && (
+        <p className="text-center text-sm font-semibold text-red-700">{state.error}</p>
+      )}
+    </form>
+  );
+}
+
+export function RemovePlayerForm({
+  roomCode,
+  playerId,
+  playerName,
+}: {
+  roomCode: string;
+  playerId: string;
+  playerName: string;
+}) {
+  const [state, action] = useActionState(removeRoomPlayer, initialState);
+  return (
+    <form action={action} className="ml-auto">
+      <input name="roomCode" type="hidden" value={roomCode} />
+      <input name="playerId" type="hidden" value={playerId} />
+      <button
+        aria-label={`Quitar a ${playerName}`}
+        className="rounded-lg px-2 py-1 text-xs font-black text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+        title={`Quitar a ${playerName}`}
+        type="submit"
+      >
+        Quitar
+      </button>
+      {state.error && <span className="sr-only" role="alert">{state.error}</span>}
     </form>
   );
 }

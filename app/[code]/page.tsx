@@ -20,32 +20,20 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
 
   const authUserId = await getAuthenticatedUserId();
   const roomSession = await gameRepository.getRoomSession(code, authUserId);
-  if (!roomSession) notFound();
-  const { game, player: currentPlayer } = roomSession;
-
-  if (!currentPlayer) {
+  if (!roomSession?.player) {
     return (
       <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5 py-10">
         <Link className="mb-6 font-bold underline" href="/">← Inicio</Link>
         <section className="rounded-[2rem] border-2 border-[var(--ink)] bg-white p-6 shadow-[7px_7px_0_var(--ink)]">
-          <p className="text-sm font-bold uppercase tracking-widest">Sala {code}</p>
-          {game.phase === "LOBBY" ? (
-            <>
-              <h1 className="mb-5 mt-1 text-3xl font-black">¿Cómo te llamás?</h1>
-              <JoinGameForm defaultCode={code} />
-            </>
-          ) : (
-            <>
-              <h1 className="mt-1 text-3xl font-black">La partida ya comenzó</h1>
-              <p className="mt-3 text-slate-600">
-                Solo pueden continuar los jugadores que ya estaban en la sala.
-              </p>
-            </>
-          )}
+          <p className="text-sm font-bold uppercase tracking-widest">Ingresar a una sala</p>
+          <h1 className="mb-5 mt-1 text-3xl font-black">¿Cómo te llamás?</h1>
+          <JoinGameForm defaultCode={code} />
         </section>
       </main>
     );
   }
+
+  const { game, player: currentPlayer } = roomSession;
 
   const drawingUrls = await resolveVisibleDrawingUrls(game, currentPlayer.id);
   const commentaryConfig = getCommentaryProtectionConfig();

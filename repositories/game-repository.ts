@@ -5,6 +5,11 @@ export interface RoomSession {
   player: Player | null;
 }
 
+export interface JoinProtectionContext {
+  ipHash: string;
+  challengeVerified: boolean;
+}
+
 export interface GameRepository {
   createRoom(
     playerName: string,
@@ -22,7 +27,20 @@ export interface GameRepository {
     code: string,
     playerName: string,
     authUserId: string,
+    protection?: JoinProtectionContext,
   ): Promise<{ game: Game; player: Player }>;
+  setLobbyLocked(
+    code: string,
+    requestedByPlayerId: string,
+    authUserId: string,
+    locked: boolean,
+  ): Promise<Game>;
+  removePlayer(
+    code: string,
+    requestedByPlayerId: string,
+    authUserId: string,
+    playerId: string,
+  ): Promise<Game>;
   startGame(
     code: string,
     requestedByPlayerId: string,
@@ -49,4 +67,12 @@ export class UnauthorizedGameActionError extends Error {
 
 export class ConcurrentGameUpdateError extends Error {
   override readonly name = "ConcurrentGameUpdateError";
+}
+
+export class JoinChallengeRequiredError extends Error {
+  override readonly name = "JoinChallengeRequiredError";
+}
+
+export class JoinRateLimitedError extends Error {
+  override readonly name = "JoinRateLimitedError";
 }

@@ -6,7 +6,7 @@ Juego de fiesta multijugador, mobile-first, inspirado en el clásico “teléfon
 
 El flujo clásico permite:
 
-- crear y entrar a salas cortas sin registro;
+- crear y entrar a salas de seis caracteres sin registro;
 - jugar rondas alternadas de texto y dibujo;
 - dibujar con lápiz, goma, colores, grosores y deshacer/rehacer;
 - sincronizar lobby, progreso, rondas y reveal automáticamente;
@@ -38,7 +38,7 @@ OPENAI_API_KEY=...
 OPENAI_COMMENTARY_MODEL=gpt-5-mini
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
 TURNSTILE_SECRET_KEY=...
-AI_IP_HASH_SECRET=...
+ABUSE_IP_HASH_SECRET=...
 AI_ENABLED=true
 ```
 
@@ -48,7 +48,9 @@ Localmente, la publishable key puede ser la clave anónima y la secret key puede
 
 Para habilitar comentarios en producción, creá un widget **Turnstile Managed** en Cloudflare, agregá los dominios de producción y preview permitidos y configurá su site key y secret. La verificación usa el modo visual `interaction-only`, por lo que normalmente permanece invisible. Para desarrollo podés permitir `localhost` o usar las claves de prueba oficiales de Turnstile.
 
-La protección usa estos valores predeterminados: 10 intentos por usuario/hora, 20 por IP/hora, 5 por partida y 1000 generaciones globales por día UTC. Los límites se pueden cambiar con las variables `AI_RATE_LIMIT_*` y `AI_DAILY_GLOBAL_LIMIT`. `AI_ENABLED=false` apaga todas las llamadas nuevas a OpenAI sin afectar el reveal. Definí `AI_IP_HASH_SECRET` con un valor aleatorio largo: PostgreSQL guarda solamente un HMAC de la IP, nunca la dirección original.
+La protección de comentarios usa estos valores predeterminados: 10 intentos por usuario/hora, 20 por IP/hora, 5 por partida y 1000 generaciones globales por día UTC. Los límites se pueden cambiar con las variables `AI_RATE_LIMIT_*` y `AI_DAILY_GLOBAL_LIMIT`. `AI_ENABLED=false` apaga todas las llamadas nuevas a OpenAI sin afectar el reveal. Definí `ABUSE_IP_HASH_SECRET` con un valor aleatorio largo: PostgreSQL guarda solamente un HMAC de la IP, nunca la dirección original. `AI_IP_HASH_SECRET` sigue funcionando como nombre heredado.
+
+El mismo widget Turnstile protege el ingreso de forma adaptativa: no aparece durante el uso normal y se solicita después de varios intentos fallidos. Los intentos se limitan en PostgreSQL por sesión anónima, IP y código, con bloqueos de 5, 15 y 60 minutos ante abuso continuado.
 
 ```bash
 pnpm supabase:reset
@@ -93,6 +95,9 @@ Los clientes reciben `GAME_CHANGED` por un Broadcast privado `game:<uuid>`. El e
 ### Seguridad y concurrencia
 
 - Las Server Actions verifican la sesión anónima y derivan el jugador desde `auth.users.id`.
+- Las salas nuevas usan seis caracteres generados con aleatoriedad criptográfica; los códigos históricos de cuatro caracteres siguen siendo legibles.
+- Los lobbies vencen a las dos horas, admiten hasta 12 jugadores y el anfitrión puede bloquearlos o quitar participantes.
+- La unión devuelve errores indistinguibles para salas inexistentes, vencidas, bloqueadas, llenas o ya iniciadas.
 - El navegador no puede escribir tablas ni leer entregas ocultas.
 - Cadenas, entradas y dibujos completos se habilitan directamente solo durante `REVEAL`.
 - Cada mutación compara `games.version` dentro de una transacción; ante conflicto recarga, revalida y reintenta.

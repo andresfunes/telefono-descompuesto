@@ -36,6 +36,8 @@ function completeGame(overrides: Partial<Game> = {}): Game {
     ],
     currentRound: null,
     rematchCode: null,
+    lobbyLocked: false,
+    lobbyExpiresAt: new Date("2026-01-01T02:00:00Z"),
     ...overrides,
   };
 }

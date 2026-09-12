@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { EntryContent, Game } from "@/domain/game";
-import { PlayerNameTakenError } from "@/repositories/game-repository";
+import {
+  JoinChallengeRequiredError,
+  PlayerNameTakenError,
+} from "@/repositories/game-repository";
 import {
   SupabaseGameRepository,
   serializeEntries,
   type GameSnapshotGateway,
+  type JoinGameGatewayResult,
   type PersistedGameCommit,
 } from "@/repositories/supabase-game-repository";
 
@@ -31,6 +35,8 @@ function snapshotFromGame(
       version,
       created_at: game.createdAt.toISOString(),
       rematch_code: game.rematchCode,
+      lobby_locked: game.lobbyLocked,
+      lobby_expires_at: game.lobbyExpiresAt.toISOString(),
     },
     players: game.players.map((player, joinOrder) => ({
       id: player.id,
@@ -54,6 +60,7 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
   private transientLoadFailures = 0;
   loadCalls = 0;
   successfulCommits = 0;
+  nextJoinResult?: JoinGameGatewayResult;
 
   failNextLoads(count = 1) {
     this.transientLoadFailures = count;
@@ -77,6 +84,8 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
       chains: [],
       currentRound: null,
       rematchCode: null,
+      lobbyLocked: false,
+      lobbyExpiresAt: new Date("2100-01-01T00:00:00Z"),
     };
     this.identities.set(playerId, authUserId);
     this.snapshots.set(code, snapshotFromGame(game, 0, this.identities));
@@ -106,22 +115,27 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
     code: string,
     authUserId: string,
     playerName: string,
-  ): Promise<void> {
+  ): Promise<JoinGameGatewayResult> {
+    if (this.nextJoinResult) {
+      const result = this.nextJoinResult;
+      this.nextJoinResult = undefined;
+      return result;
+    }
     const snapshot = this.snapshots.get(code);
     if (!snapshot) {
-      throw { message: "ROOM_NOT_FOUND" };
+      return "unavailable";
     }
     const existing = snapshot.players.find(
       (player) => player.auth_user_id === authUserId,
     );
-    if (existing) return;
-    if (snapshot.game.phase !== "LOBBY") throw { message: "GAME_ALREADY_STARTED" };
+    if (existing) return "joined";
+    if (snapshot.game.phase !== "LOBBY") return "unavailable";
     if (
       snapshot.players.some(
         (player) => player.name.toLocaleLowerCase() === playerName.toLocaleLowerCase(),
       )
     ) {
-      throw { message: "PLAYER_NAME_TAKEN" };
+      return "name_taken";
     }
 
     const player: TestPlayer = {
@@ -139,6 +153,7 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
       joined_at: player.joinedAt,
     });
     snapshot.game.version += 1;
+    return "joined";
   }
 
   async loadGame(code: string): Promise<unknown | null> {
@@ -149,6 +164,29 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
     }
     const snapshot = this.snapshots.get(code);
     return snapshot ? structuredClone(snapshot) : null;
+  }
+
+  async loadGameForUser(code: string, authUserId: string): Promise<unknown | null> {
+    this.loadCalls += 1;
+    const snapshot = this.snapshots.get(code);
+    if (!snapshot?.players.some((player) => player.auth_user_id === authUserId)) return null;
+    return structuredClone(snapshot);
+  }
+
+  async setLobbyLocked(code: string, authUserId: string, locked: boolean): Promise<void> {
+    const snapshot = this.snapshots.get(code);
+    const host = snapshot?.players.find((player) => player.id === snapshot.game.host_player_id);
+    if (!snapshot || host?.auth_user_id !== authUserId) throw new Error("NOT_HOST");
+    snapshot.game.lobby_locked = locked;
+    snapshot.game.version += 1;
+  }
+
+  async removePlayer(code: string, authUserId: string, playerId: string): Promise<void> {
+    const snapshot = this.snapshots.get(code);
+    const host = snapshot?.players.find((player) => player.id === snapshot.game.host_player_id);
+    if (!snapshot || host?.auth_user_id !== authUserId) throw new Error("NOT_HOST");
+    snapshot.players = snapshot.players.filter((player) => player.id !== playerId);
+    snapshot.game.version += 1;
   }
 
   async commitGame(input: PersistedGameCommit): Promise<boolean> {
@@ -233,6 +271,39 @@ describe("SupabaseGameRepository", () => {
     await expect(
       repository.joinRoom(created.game.code, "ana", "auth-other"),
     ).rejects.toBeInstanceOf(PlayerNameTakenError);
+  });
+
+  it("surfaces an adaptive join challenge without loading room data", async () => {
+    const gateway = new FakeSnapshotGateway();
+    const repository = new SupabaseGameRepository(gateway);
+    const created = await repository.createRoom("Ana", "auth-ana");
+    gateway.nextJoinResult = "challenge_required";
+
+    await expect(
+      repository.joinRoom(created.game.code, "Beto", "auth-beto", {
+        ipHash: "unavailable",
+        challengeVerified: false,
+      }),
+    ).rejects.toBeInstanceOf(JoinChallengeRequiredError);
+  });
+
+  it("persists host lobby moderation", async () => {
+    const gateway = new FakeSnapshotGateway();
+    const repository = new SupabaseGameRepository(gateway);
+    const host = await repository.createRoom("Ana", "auth-ana");
+    const guest = await repository.joinRoom(host.game.code, "Beto", "auth-beto");
+
+    await expect(
+      repository.setLobbyLocked(host.game.code, host.player.id, "auth-ana", true),
+    ).resolves.toMatchObject({ lobbyLocked: true });
+    await expect(
+      repository.removePlayer(
+        host.game.code,
+        host.player.id,
+        "auth-ana",
+        guest.player.id,
+      ),
+    ).resolves.toMatchObject({ players: [{ name: "Ana" }] });
   });
 
   it("retries concurrent submissions and advances a round exactly once", async () => {

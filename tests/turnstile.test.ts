@@ -4,6 +4,7 @@ import { verifyTurnstileToken } from "@/lib/ai/turnstile";
 const input = {
   secretKey: "secret",
   remoteIp: "203.0.113.4",
+  expectedAction: "ai_commentary",
 };
 
 describe("Turnstile server verification", () => {
@@ -35,6 +36,20 @@ describe("Turnstile server verification", () => {
     expect(body.get("secret")).toBe("secret");
     expect(body.get("response")).toBe("valid");
     expect(body.get("remoteip")).toBe("203.0.113.4");
+  });
+
+  it("rejects a valid token issued for a different action", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, action: "ai_commentary" })),
+    );
+    await expect(
+      verifyTurnstileToken({
+        ...input,
+        token: "valid",
+        expectedAction: "join_game",
+        fetchImpl,
+      }),
+    ).resolves.toBe(false);
   });
 
   it("degrades safely when Siteverify is unavailable", async () => {

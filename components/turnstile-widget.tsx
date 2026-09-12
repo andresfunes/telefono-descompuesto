@@ -2,7 +2,6 @@
 
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { TURNSTILE_COMMENTARY_ACTION } from "@/lib/ai/turnstile-action";
 
 interface TurnstileApi {
   render(
@@ -32,9 +31,13 @@ declare global {
 export function TurnstileWidget({
   onToken,
   resetSignal,
+  action,
+  unavailableMessage = "La verificación no está disponible en este momento.",
 }: {
   onToken(token: string): void;
   resetSignal: unknown;
+  action: string;
+  unavailableMessage?: string;
 }) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -47,7 +50,7 @@ export function TurnstileWidget({
     }
     widgetIdRef.current = window.turnstile.render(containerRef.current, {
       sitekey: siteKey,
-      action: TURNSTILE_COMMENTARY_ACTION,
+      action,
       appearance: "interaction-only",
       execution: "render",
       language: "es",
@@ -65,7 +68,7 @@ export function TurnstileWidget({
         setStatus("error");
       },
     });
-  }, [onToken, siteKey]);
+  }, [action, onToken, siteKey]);
 
   useEffect(() => {
     return () => {
@@ -83,7 +86,7 @@ export function TurnstileWidget({
   if (!siteKey) {
     return (
       <p className="text-sm font-semibold text-slate-600">
-        Los comentarios automáticos no están disponibles en este momento.
+        {unavailableMessage}
       </p>
     );
   }

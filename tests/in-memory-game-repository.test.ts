@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { GameRuleError } from "@/domain/game";
+import { GameRuleError, MAXIMUM_PLAYER_COUNT } from "@/domain/game";
 import { InMemoryGameRepository } from "@/repositories/in-memory-game-repository";
 import { PlayerNameTakenError, RoomNotFoundError } from "@/repositories/game-repository";
 
@@ -13,7 +13,7 @@ describe("InMemoryGameRepository", () => {
   it("creates an empty lobby with a short room code", async () => {
     const { game, player } = await repository.createRoom("Ana", "auth-ana");
 
-    expect(game.code).toMatch(/^[A-HJ-NP-Z2-9]{4}$/);
+    expect(game.code).toMatch(/^[A-HJ-NP-Z2-9]{6}$/);
     expect(game.phase).toBe("LOBBY");
     expect(game.players).toEqual([player]);
     expect(game.hostPlayerId).toBe(player.id);
@@ -94,6 +94,46 @@ describe("InMemoryGameRepository", () => {
       repository.startGame(ana.game.code, ana.player.id, "auth-beto"),
     ).rejects.toMatchObject({ name: "UnauthorizedGameActionError" });
     expect(beto.game.hostPlayerId).toBe(ana.player.id);
+  });
+
+  it("lets the host lock the lobby and remove an unwanted player", async () => {
+    const host = await repository.createRoom("Host", "auth-host");
+    const guest = await repository.joinRoom(host.game.code, "Guest", "auth-guest");
+
+    const locked = await repository.setLobbyLocked(
+      host.game.code,
+      host.player.id,
+      "auth-host",
+      true,
+    );
+    expect(locked.lobbyLocked).toBe(true);
+    await expect(
+      repository.joinRoom(host.game.code, "Intruso", "auth-intruso"),
+    ).rejects.toBeInstanceOf(RoomNotFoundError);
+
+    await repository.removePlayer(
+      host.game.code,
+      host.player.id,
+      "auth-host",
+      guest.player.id,
+    );
+    await expect(
+      repository.getPlayerForUser(host.game.code, "auth-guest"),
+    ).resolves.toBeNull();
+    await repository.setLobbyLocked(host.game.code, host.player.id, "auth-host", false);
+    await expect(
+      repository.joinRoom(host.game.code, "Guest", "auth-guest"),
+    ).rejects.toBeInstanceOf(RoomNotFoundError);
+  });
+
+  it("caps a lobby at twelve players", async () => {
+    const host = await repository.createRoom("Host", "auth-host");
+    for (let index = 1; index < MAXIMUM_PLAYER_COUNT; index += 1) {
+      await repository.joinRoom(host.game.code, `Player ${index}`, `auth-${index}`);
+    }
+    await expect(
+      repository.joinRoom(host.game.code, "Player 13", "auth-13"),
+    ).rejects.toBeInstanceOf(RoomNotFoundError);
   });
 
   it("creates a new lobby for the host after reveal", async () => {

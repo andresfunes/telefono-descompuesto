@@ -3,8 +3,12 @@ import {
   createLobbyGame,
   GameRuleError,
   generateRoomCode,
+  isLobbyExpired,
+  MAXIMUM_PLAYER_COUNT,
   normalizePlayerName,
   normalizeRoomCode,
+  removePlayerFromLobby,
+  setLobbyLocked as setDomainLobbyLocked,
   startGame as startDomainGame,
   submitEntryAndAdvance,
 } from "@/domain/game";
@@ -20,6 +24,7 @@ import {
 export class InMemoryGameRepository implements GameRepository {
   private readonly rooms = new Map<string, Game>();
   private readonly memberships = new Map<string, Map<string, string>>();
+  private readonly removedUsers = new Map<string, Set<string>>();
 
   async createRoom(
     playerName: string,
@@ -38,6 +43,7 @@ export class InMemoryGameRepository implements GameRepository {
     game.hostPlayerId = player.id;
     this.rooms.set(code, game);
     this.memberships.set(code, new Map([[authUserId, player.id]]));
+    this.removedUsers.set(code, new Set());
     return structuredClone({ game, player });
   }
 
@@ -124,6 +130,15 @@ export class InMemoryGameRepository implements GameRepository {
     if (game.phase !== "LOBBY") {
       throw new GameRuleError("GAME_ALREADY_STARTED", "La partida ya comenzó.");
     }
+    if (isLobbyExpired(game) || game.lobbyLocked) {
+      throw new RoomNotFoundError("No pudimos entrar a esa sala.");
+    }
+    if (this.removedUsers.get(normalizedCode)?.has(authUserId)) {
+      throw new RoomNotFoundError("No pudimos entrar a esa sala.");
+    }
+    if (game.players.length >= MAXIMUM_PLAYER_COUNT) {
+      throw new RoomNotFoundError("No pudimos entrar a esa sala.");
+    }
 
     const name = normalizePlayerName(playerName);
     const isTaken = game.players.some(
@@ -137,6 +152,51 @@ export class InMemoryGameRepository implements GameRepository {
     memberships.set(authUserId, player.id);
     this.memberships.set(normalizedCode, memberships);
     return { game: structuredClone(game), player: structuredClone(player) };
+  }
+
+  async setLobbyLocked(
+    code: string,
+    requestedByPlayerId: string,
+    authUserId: string,
+    locked: boolean,
+  ): Promise<Game> {
+    const normalizedCode = normalizeRoomCode(code);
+    const game = this.rooms.get(normalizedCode);
+    if (!game) throw new RoomNotFoundError("La sala no existe.");
+    if (this.memberships.get(normalizedCode)?.get(authUserId) !== requestedByPlayerId) {
+      throw new UnauthorizedGameActionError("No podés modificar a otro jugador.");
+    }
+    const updated = setDomainLobbyLocked(game, requestedByPlayerId, locked);
+    this.rooms.set(normalizedCode, updated);
+    return structuredClone(updated);
+  }
+
+  async removePlayer(
+    code: string,
+    requestedByPlayerId: string,
+    authUserId: string,
+    playerId: string,
+  ): Promise<Game> {
+    const normalizedCode = normalizeRoomCode(code);
+    const game = this.rooms.get(normalizedCode);
+    if (!game) throw new RoomNotFoundError("La sala no existe.");
+    if (this.memberships.get(normalizedCode)?.get(authUserId) !== requestedByPlayerId) {
+      throw new UnauthorizedGameActionError("No podés modificar a otro jugador.");
+    }
+    const updated = removePlayerFromLobby(game, requestedByPlayerId, playerId);
+    this.rooms.set(normalizedCode, updated);
+    const memberships = this.memberships.get(normalizedCode);
+    if (memberships) {
+      for (const [userId, memberPlayerId] of memberships) {
+        if (memberPlayerId === playerId) {
+          memberships.delete(userId);
+          const removed = this.removedUsers.get(normalizedCode) ?? new Set<string>();
+          removed.add(userId);
+          this.removedUsers.set(normalizedCode, removed);
+        }
+      }
+    }
+    return structuredClone(updated);
   }
 
   async startGame(

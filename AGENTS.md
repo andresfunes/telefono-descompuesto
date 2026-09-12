@@ -89,7 +89,7 @@ No account creation for MVP.
 
 Room URLs should be short:
 
-/ABCD
+/ABC234
 
 Prioritize:
 - iPhone Safari
