@@ -9,6 +9,7 @@ import {
   isDrawingEmpty,
   isTapStroke,
   redoDrawing,
+  replaceDrawingWithRaster,
   serializeDrawingDraft,
   undoDrawing,
 } from "@/components/drawing/drawing-state";
@@ -79,5 +80,22 @@ describe("drawing state", () => {
       version: 1,
       strokes: [{ ...strokes[0], points: [Number.NaN, 2, 3, 4] }],
     }))).toEqual([]);
+  });
+
+  it("keeps rasterized fills undoable and restorable", () => {
+    const drawn = addStroke(EMPTY_DRAWING_HISTORY, penStroke("outline"));
+    const raster = {
+      id: "filled",
+      tool: "raster" as const,
+      dataUrl: "data:image/png;base64,ZmFrZQ==",
+    };
+    const filled = replaceDrawingWithRaster(drawn, raster);
+
+    expect(filled.strokes).toEqual([raster]);
+    expect(undoDrawing(filled).strokes).toEqual(drawn.strokes);
+    expect(deserializeDrawingDraft(serializeDrawingDraft(filled.strokes))).toEqual([
+      raster,
+    ]);
+    expect(isDrawingEmpty(filled.strokes)).toBe(false);
   });
 });

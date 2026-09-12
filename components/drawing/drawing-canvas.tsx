@@ -9,8 +9,9 @@ import {
 } from "react";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
-import { Circle, Layer, Line, Rect, Stage } from "react-konva";
+import { Circle, Image as KonvaImage, Layer, Line, Rect, Stage } from "react-konva";
 import { DrawingToolbar } from "./drawing-toolbar";
+import { floodFillPngDataUrl } from "./flood-fill";
 import {
   addStroke,
   appendPoint,
@@ -21,6 +22,7 @@ import {
   isDrawingEmpty,
   isTapStroke,
   redoDrawing,
+  replaceDrawingWithRaster,
   serializeDrawingDraft,
   undoDrawing,
   type DrawingHistory,
@@ -53,6 +55,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
   const stageRef = useRef<Konva.Stage>(null);
   const cursorRef = useRef<Konva.Circle>(null);
   const activePointerRef = useRef<number | null>(null);
+  const fillPendingRef = useRef(false);
   const draftRef = useRef<DrawingStroke | null>(null);
   const historyRef = useRef<DrawingHistory>(EMPTY_DRAWING_HISTORY);
   const strokeSequenceRef = useRef(0);
@@ -63,6 +66,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
   const [color, setColor] = useState("#18231f");
   const [brushSize, setBrushSize] = useState(12);
   const [cursorPoint, setCursorPoint] = useState<DrawingPoint | null>(null);
+  const [rasterImage, setRasterImage] = useState<{
+    source: string;
+    image: CanvasImageSource;
+  } | null>(null);
 
   const replaceHistory = (nextHistory: DrawingHistory) => {
     historyRef.current = nextHistory;
@@ -88,6 +95,21 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
     historyRef.current = restoredHistory;
     setHistory(restoredHistory);
   }, [storageKey]);
+
+  const raster = history.strokes.findLast((element) => element.tool === "raster");
+
+  useEffect(() => {
+    if (!raster) return;
+    let active = true;
+    const image = new Image();
+    image.onload = () => {
+      if (active) setRasterImage({ source: raster.dataUrl, image });
+    };
+    image.src = raster.dataUrl;
+    return () => {
+      active = false;
+    };
+  }, [raster]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -132,12 +154,40 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
     return position ? clampPoint(position) : null;
   };
 
+  const fillRegion = async (point: DrawingPoint) => {
+    const stage = stageRef.current;
+    if (!stage || fillPendingRef.current) return;
+    fillPendingRef.current = true;
+    try {
+      const source = exportStageToPng(stage, {
+        width: LOGICAL_CANVAS_WIDTH,
+        height: LOGICAL_CANVAS_HEIGHT,
+      });
+      const result = await floodFillPngDataUrl(source, point, color);
+      if (!result) return;
+      const nextRaster = {
+        id: `raster-${Date.now()}`,
+        tool: "raster" as const,
+        dataUrl: result.dataUrl,
+      };
+      setRasterImage({ source: result.dataUrl, image: result.image });
+      replaceHistory(replaceDrawingWithRaster(historyRef.current, nextRaster));
+    } finally {
+      fillPendingRef.current = false;
+    }
+  };
+
   const handlePointerDown = (event: KonvaEventObject<PointerEvent>) => {
     if (!event.evt.isPrimary || activePointerRef.current !== null) return;
     event.evt.preventDefault();
     const point = pointerPosition(event);
     if (!point) return;
     setCursorPoint(point);
+
+    if (tool === "fill") {
+      void fillRegion(point);
+      return;
+    }
 
     activePointerRef.current = event.evt.pointerId;
     strokeSequenceRef.current += 1;
@@ -182,6 +232,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
 
   const scale = containerWidth / LOGICAL_CANVAS_WIDTH;
   const visibleStrokes = draft ? [...history.strokes, draft] : history.strokes;
+  const lastRasterIndex = visibleStrokes.findLastIndex((element) => element.tool === "raster");
+  const visibleElements = lastRasterIndex >= 0
+    ? visibleStrokes.slice(lastRasterIndex)
+    : visibleStrokes;
 
   return (
     <div className="space-y-4">
@@ -202,7 +256,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
 
       <div
         aria-label="Lienzo de dibujo"
-        className="w-full cursor-none overflow-hidden rounded-2xl border-2 border-[var(--ink)] bg-white shadow-inner"
+        className={`w-full overflow-hidden rounded-2xl border-2 border-[var(--ink)] bg-white shadow-inner ${
+          tool === "fill" ? "cursor-crosshair" : "cursor-none"
+        }`}
         data-testid="drawing-canvas"
         ref={containerRef}
         role="application"
@@ -226,8 +282,17 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
               <Rect fill="#ffffff" height={LOGICAL_CANVAS_HEIGHT} width={LOGICAL_CANVAS_WIDTH} />
             </Layer>
             <Layer listening={false}>
-              {visibleStrokes.map((stroke) => (
-                isTapStroke(stroke) ? (
+              {visibleElements.map((stroke) => (
+                stroke.tool === "raster" ? (
+                  rasterImage?.source === stroke.dataUrl && (
+                    <KonvaImage
+                      height={LOGICAL_CANVAS_HEIGHT}
+                      image={rasterImage.image}
+                      key={stroke.id}
+                      width={LOGICAL_CANVAS_WIDTH}
+                    />
+                  )
+                ) : isTapStroke(stroke) ? (
                   <Circle
                     fill={stroke.color}
                     globalCompositeOperation={
@@ -255,7 +320,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
               ))}
             </Layer>
             <Layer listening={false}>
-              {cursorPoint && (
+              {cursorPoint && tool !== "fill" && (
                 <Circle
                   dash={tool === "eraser" ? [6 / scale, 4 / scale] : undefined}
                   fill={tool === "eraser" ? "#ffffff" : color}

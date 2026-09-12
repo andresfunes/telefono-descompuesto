@@ -31,7 +31,7 @@ export const DRAWING_COLORS = [
   ...EXTRA_DRAWING_COLORS,
 ].map(({ value }) => value);
 export const PRIMARY_BRUSH_SIZES = [6, 12, 24] as const;
-export const EXTRA_BRUSH_SIZES = [36, 48] as const;
+export const EXTRA_BRUSH_SIZES = [36, 48, 72, 96] as const;
 export const BRUSH_SIZES = [...PRIMARY_BRUSH_SIZES, ...EXTRA_BRUSH_SIZES];
 
 interface DrawingToolbarProps {
@@ -54,6 +54,71 @@ const buttonClass =
 const colorButtonClass =
   "size-11 rounded-full border-2 border-white shadow-[0_0_0_2px_var(--ink)] transition aria-pressed:scale-90 aria-pressed:shadow-[0_0_0_4px_var(--coral)]";
 
+function PencilIcon() {
+  return (
+    <svg aria-hidden="true" className="size-6" fill="none" viewBox="0 0 24 24">
+      <path
+        d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"
+        fill="currentColor"
+        opacity="0.2"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path d="m14.5 7.5 3 3M5.5 16l3 3" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function EraserIcon() {
+  return (
+    <svg aria-hidden="true" className="size-6" fill="none" viewBox="0 0 24 24">
+      <path
+        d="m4.5 14.5 8.8-8.8a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L10 19H6.4l-1.9-1.7a2 2 0 0 1 0-2.8Z"
+        fill="currentColor"
+        opacity="0.2"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path d="m10.5 8.5 5 5M10 19h9" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function PaintBucketIcon() {
+  return (
+    <svg aria-hidden="true" className="size-5 -rotate-12" fill="none" viewBox="0 0 24 24">
+      <path
+        d="m5 9 7-7 7 7-7 7-7-7Z"
+        fill="currentColor"
+        opacity="0.2"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path d="m8 12 7-7" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+      <path
+        d="M19 13.5s2 2.2 2 3.5a2 2 0 1 1-4 0c0-1.3 2-3.5 2-3.5Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function ClearIcon() {
+  return (
+    <svg aria-hidden="true" className="size-6" fill="none" viewBox="0 0 24 24">
+      <path d="M5 7h14M9 7V4h6v3M8 10v7M12 10v7M16 10v7" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+      <path d="m7 7 1 14h8l1-14" stroke="currentColor" strokeLinejoin="round" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function brushSizePreviewDiameter(size: number, maximum = 40): number {
+  return Math.min(maximum, Math.max(5, size / 2));
+}
+
 export function DrawingToolbar({
   tool,
   color,
@@ -75,7 +140,7 @@ export function DrawingToolbar({
 
   const selectColor = (value: string, closeExtraColors = false) => {
     onColorChange(value);
-    onToolChange("pen");
+    if (tool === "eraser") onToolChange("pen");
     if (closeExtraColors) extraColorsRef.current?.removeAttribute("open");
   };
 
@@ -88,20 +153,34 @@ export function DrawingToolbar({
     <div className="space-y-3" aria-label="Herramientas de dibujo">
       <div className="flex flex-wrap gap-2">
         <button
+          aria-label="Lápiz"
           aria-pressed={tool === "pen"}
-          className={buttonClass}
+          className={`${buttonClass} p-0`}
           onClick={() => onToolChange("pen")}
+          title="Lápiz"
           type="button"
         >
-          ✏️ Lápiz
+          <PencilIcon />
         </button>
         <button
+          aria-label="Borrador"
           aria-pressed={tool === "eraser"}
-          className={buttonClass}
+          className={`${buttonClass} p-0`}
           onClick={() => onToolChange("eraser")}
+          title="Borrador"
           type="button"
         >
-          Borrador
+          <EraserIcon />
+        </button>
+        <button
+          aria-label="Rellenar"
+          aria-pressed={tool === "fill"}
+          className={`${buttonClass} p-0`}
+          onClick={() => onToolChange("fill")}
+          title="Rellenar"
+          type="button"
+        >
+          <PaintBucketIcon />
         </button>
         <button aria-label="Deshacer" className={buttonClass} disabled={!canUndo} onClick={onUndo} type="button">
           ↶
@@ -109,8 +188,15 @@ export function DrawingToolbar({
         <button aria-label="Rehacer" className={buttonClass} disabled={!canRedo} onClick={onRedo} type="button">
           ↷
         </button>
-        <button className={buttonClass} disabled={!canClear} onClick={onClear} type="button">
-          Limpiar
+        <button
+          aria-label="Limpiar dibujo"
+          className={`${buttonClass} p-0`}
+          disabled={!canClear}
+          onClick={onClear}
+          title="Limpiar dibujo"
+          type="button"
+        >
+          <ClearIcon />
         </button>
       </div>
 
@@ -206,8 +292,8 @@ export function DrawingToolbar({
                   <span
                     className="absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--ink)]"
                     style={{
-                      height: selectedExtraBrushSize / 2,
-                      width: selectedExtraBrushSize / 2,
+                      height: brushSizePreviewDiameter(selectedExtraBrushSize, 30),
+                      width: brushSizePreviewDiameter(selectedExtraBrushSize, 30),
                     }}
                   />
                   <span className="absolute right-0.5 top-0.5 text-xs leading-none">+</span>
@@ -216,7 +302,7 @@ export function DrawingToolbar({
                 <span className="text-xl leading-none">+</span>
               )}
             </summary>
-            <div className="absolute left-1/2 top-full z-20 mt-3 flex w-[7.75rem] -translate-x-1/2 items-center justify-center gap-2 rounded-2xl border-2 border-[var(--ink)] bg-white p-3 shadow-[5px_5px_0_var(--ink)]">
+            <div className="absolute left-1/2 top-full z-20 mt-3 grid w-[7.75rem] -translate-x-1/2 grid-cols-2 place-items-center gap-2 rounded-2xl border-2 border-[var(--ink)] bg-white p-3 shadow-[5px_5px_0_var(--ink)]">
               {EXTRA_BRUSH_SIZES.map((size) => (
                 <button
                   aria-label={`Grosor ${size}`}
@@ -228,7 +314,10 @@ export function DrawingToolbar({
                 >
                   <span
                     className="absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--ink)]"
-                    style={{ height: size / 2, width: size / 2 }}
+                    style={{
+                      height: brushSizePreviewDiameter(size),
+                      width: brushSizePreviewDiameter(size),
+                    }}
                   />
                 </button>
               ))}

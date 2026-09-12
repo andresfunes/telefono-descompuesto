@@ -1,4 +1,5 @@
-export type DrawingTool = "pen" | "eraser";
+export type DrawingTool = "pen" | "eraser" | "fill";
+export type DrawingStrokeTool = Exclude<DrawingTool, "fill">;
 
 export interface DrawingPoint {
   x: number;
@@ -7,16 +8,24 @@ export interface DrawingPoint {
 
 export interface DrawingStroke {
   id: string;
-  tool: DrawingTool;
+  tool: DrawingStrokeTool;
   color: string;
   width: number;
   points: number[];
 }
 
+export interface DrawingRaster {
+  id: string;
+  tool: "raster";
+  dataUrl: string;
+}
+
+export type DrawingElement = DrawingStroke | DrawingRaster;
+
 export interface DrawingHistory {
-  strokes: DrawingStroke[];
-  past: DrawingStroke[][];
-  future: DrawingStroke[][];
+  strokes: DrawingElement[];
+  past: DrawingElement[][];
+  future: DrawingElement[][];
 }
 
 export const EMPTY_DRAWING_HISTORY: DrawingHistory = {
@@ -27,7 +36,7 @@ export const EMPTY_DRAWING_HISTORY: DrawingHistory = {
 
 export function createStroke(
   id: string,
-  tool: DrawingTool,
+  tool: DrawingStrokeTool,
   color: string,
   width: number,
   point: DrawingPoint,
@@ -56,6 +65,17 @@ export function isTapStroke(stroke: DrawingStroke): boolean {
 export function addStroke(history: DrawingHistory, stroke: DrawingStroke): DrawingHistory {
   return {
     strokes: [...history.strokes, stroke],
+    past: [...history.past, history.strokes],
+    future: [],
+  };
+}
+
+export function replaceDrawingWithRaster(
+  history: DrawingHistory,
+  raster: DrawingRaster,
+): DrawingHistory {
+  return {
+    strokes: [raster],
     past: [...history.past, history.strokes],
     future: [],
   };
@@ -90,22 +110,32 @@ export function clearDrawing(history: DrawingHistory): DrawingHistory {
   };
 }
 
-export function isDrawingEmpty(strokes: readonly DrawingStroke[]): boolean {
-  return !strokes.some((stroke) => stroke.tool === "pen" && stroke.points.length >= 4);
+export function isDrawingEmpty(strokes: readonly DrawingElement[]): boolean {
+  return !strokes.some((stroke) =>
+    stroke.tool === "raster" || (stroke.tool === "pen" && stroke.points.length >= 4),
+  );
 }
 
-export function serializeDrawingDraft(strokes: readonly DrawingStroke[]): string {
+export function serializeDrawingDraft(strokes: readonly DrawingElement[]): string {
   return JSON.stringify({ version: 1, strokes });
 }
 
-export function deserializeDrawingDraft(value: string): DrawingStroke[] {
+export function deserializeDrawingDraft(value: string): DrawingElement[] {
   try {
     const parsed = JSON.parse(value) as { version?: unknown; strokes?: unknown };
     if (parsed.version !== 1 || !Array.isArray(parsed.strokes)) return [];
 
-    return parsed.strokes.filter((candidate): candidate is DrawingStroke => {
+    return parsed.strokes.filter((candidate): candidate is DrawingElement => {
       if (!candidate || typeof candidate !== "object") return false;
-      const stroke = candidate as Partial<DrawingStroke>;
+      const stroke = candidate as Record<string, unknown>;
+      if (stroke.tool === "raster") {
+        return (
+          typeof stroke.id === "string" &&
+          typeof stroke.dataUrl === "string" &&
+          stroke.dataUrl.startsWith("data:image/png;base64,") &&
+          stroke.dataUrl.length <= 4_000_000
+        );
+      }
       return (
         typeof stroke.id === "string" &&
         (stroke.tool === "pen" || stroke.tool === "eraser") &&
@@ -116,7 +146,9 @@ export function deserializeDrawingDraft(value: string): DrawingStroke[] {
         Array.isArray(stroke.points) &&
         stroke.points.length >= 4 &&
         stroke.points.length % 2 === 0 &&
-        stroke.points.every((point) => typeof point === "number" && Number.isFinite(point))
+        stroke.points.every((point: unknown) =>
+          typeof point === "number" && Number.isFinite(point),
+        )
       );
     });
   } catch {
