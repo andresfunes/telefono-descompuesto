@@ -19,9 +19,11 @@ import {
   RoomNotFoundError,
   UnauthorizedGameActionError,
   type GameRepository,
+  type RoomSession,
 } from "./game-repository";
 
 const MAX_COMMIT_ATTEMPTS = 5;
+const MAX_LOAD_ATTEMPTS = 2;
 
 type GameChangeKind =
   | "GAME_STARTED"
@@ -65,6 +67,19 @@ function hasMessage(error: unknown): error is RpcErrorShape {
 
 export function rpcFailure(error: unknown): Error {
   return new Error(hasMessage(error) ? error.message : "Falló la operación de Supabase.");
+}
+
+export function isTransientLoadFailure(error: unknown): boolean {
+  if (!hasMessage(error)) return false;
+  const message = error.message.toLocaleLowerCase();
+  return [
+    "gateway timeout",
+    "service unavailable",
+    "bad gateway",
+    "fetch failed",
+    "etimedout",
+    "econnreset",
+  ].some((fragment) => message.includes(fragment));
 }
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -291,8 +306,16 @@ export class SupabaseGameRepository implements GameRepository {
   constructor(private readonly gateway: GameSnapshotGateway) {}
 
   private async load(code: string): Promise<LoadedGame | null> {
-    const snapshot = await this.gateway.loadGame(normalizeRoomCode(code));
-    return snapshot ? deserializeGameSnapshot(snapshot) : null;
+    const normalizedCode = normalizeRoomCode(code);
+    for (let attempt = 1; attempt <= MAX_LOAD_ATTEMPTS; attempt += 1) {
+      try {
+        const snapshot = await this.gateway.loadGame(normalizedCode);
+        return snapshot ? deserializeGameSnapshot(snapshot) : null;
+      } catch (error) {
+        if (attempt === MAX_LOAD_ATTEMPTS || !isTransientLoadFailure(error)) throw error;
+      }
+    }
+    return null;
   }
 
   async createRoom(
@@ -361,6 +384,20 @@ export class SupabaseGameRepository implements GameRepository {
 
   async getRoom(code: string): Promise<Game | null> {
     return (await this.load(code))?.game ?? null;
+  }
+
+  async getRoomSession(
+    code: string,
+    authUserId: string | null,
+  ): Promise<RoomSession | null> {
+    const loaded = await this.load(code);
+    if (!loaded) return null;
+
+    const playerId = authUserId
+      ? loaded.playerIdByAuthUserId.get(authUserId)
+      : undefined;
+    const player = loaded.game.players.find((candidate) => candidate.id === playerId) ?? null;
+    return { game: loaded.game, player };
   }
 
   async getPlayerForUser(code: string, authUserId: string): Promise<Player | null> {

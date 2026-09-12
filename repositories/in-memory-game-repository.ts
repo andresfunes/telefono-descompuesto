@@ -14,6 +14,7 @@ import {
   RoomNotFoundError,
   UnauthorizedGameActionError,
   type GameRepository,
+  type RoomSession,
 } from "./game-repository";
 
 export class InMemoryGameRepository implements GameRepository {
@@ -82,6 +83,21 @@ export class InMemoryGameRepository implements GameRepository {
   async getRoom(code: string): Promise<Game | null> {
     const game = this.rooms.get(normalizeRoomCode(code));
     return game ? structuredClone(game) : null;
+  }
+
+  async getRoomSession(
+    code: string,
+    authUserId: string | null,
+  ): Promise<RoomSession | null> {
+    const normalizedCode = normalizeRoomCode(code);
+    const game = this.rooms.get(normalizedCode);
+    if (!game) return null;
+
+    const playerId = authUserId
+      ? this.memberships.get(normalizedCode)?.get(authUserId)
+      : undefined;
+    const player = game.players.find((candidate) => candidate.id === playerId) ?? null;
+    return structuredClone({ game, player });
   }
 
   async getPlayerForUser(code: string, authUserId: string): Promise<Player | null> {

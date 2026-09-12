@@ -17,15 +17,10 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
   const code = normalizeRoomCode((await params).code);
   if (!isValidRoomCode(code)) notFound();
 
-  const [game, authUserId] = await Promise.all([
-    gameRepository.getRoom(code),
-    getAuthenticatedUserId(),
-  ]);
-  if (!game) notFound();
-
-  const currentPlayer = authUserId
-    ? await gameRepository.getPlayerForUser(code, authUserId)
-    : null;
+  const authUserId = await getAuthenticatedUserId();
+  const roomSession = await gameRepository.getRoomSession(code, authUserId);
+  if (!roomSession) notFound();
+  const { game, player: currentPlayer } = roomSession;
 
   if (!currentPlayer) {
     return (

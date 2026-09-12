@@ -12,8 +12,9 @@ const globalRepository = globalThis as typeof globalThis & {
 };
 
 export const gameRepository =
-  globalRepository.gameRepository ??
-  new SupabaseGameRepository(new SupabaseSnapshotGateway());
+  typeof globalRepository.gameRepository?.getRoomSession === "function"
+    ? globalRepository.gameRepository
+    : new SupabaseGameRepository(new SupabaseSnapshotGateway());
 
 globalRepository.gameRepository = gameRepository;
 

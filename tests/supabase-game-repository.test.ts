@@ -51,7 +51,13 @@ function snapshotFromGame(
 class FakeSnapshotGateway implements GameSnapshotGateway {
   private readonly snapshots = new Map<string, ReturnType<typeof snapshotFromGame>>();
   private readonly identities = new Map<string, string>();
+  private transientLoadFailures = 0;
+  loadCalls = 0;
   successfulCommits = 0;
+
+  failNextLoads(count = 1) {
+    this.transientLoadFailures = count;
+  }
 
   async createGameWithHost(
     code: string,
@@ -136,6 +142,11 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
   }
 
   async loadGame(code: string): Promise<unknown | null> {
+    this.loadCalls += 1;
+    if (this.transientLoadFailures > 0) {
+      this.transientLoadFailures -= 1;
+      throw new Error("Gateway Timeout");
+    }
     const snapshot = this.snapshots.get(code);
     return snapshot ? structuredClone(snapshot) : null;
   }
@@ -172,6 +183,29 @@ function drawing(playerId: string, roundNumber: number): EntryContent {
 }
 
 describe("SupabaseGameRepository", () => {
+  it("loads a room and its membership from one snapshot", async () => {
+    const gateway = new FakeSnapshotGateway();
+    const repository = new SupabaseGameRepository(gateway);
+    const created = await repository.createRoom("Ana", "auth-ana");
+    const callsBeforeSession = gateway.loadCalls;
+
+    await expect(
+      repository.getRoomSession(created.game.code, "auth-ana"),
+    ).resolves.toEqual({ game: created.game, player: created.player });
+    expect(gateway.loadCalls - callsBeforeSession).toBe(1);
+  });
+
+  it("retries a transient timeout while loading a snapshot", async () => {
+    const gateway = new FakeSnapshotGateway();
+    const repository = new SupabaseGameRepository(gateway);
+    const created = await repository.createRoom("Ana", "auth-ana");
+    const callsBeforeLoad = gateway.loadCalls;
+    gateway.failNextLoads();
+
+    await expect(repository.getRoom(created.game.code)).resolves.toEqual(created.game);
+    expect(gateway.loadCalls - callsBeforeLoad).toBe(2);
+  });
+
   it("persists creator membership, host identity, joins, and reload reconstruction", async () => {
     const gateway = new FakeSnapshotGateway();
     const repository = new SupabaseGameRepository(gateway);

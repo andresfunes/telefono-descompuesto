@@ -1,5 +1,10 @@
 import type { Game, Player, SubmitEntryCommand } from "@/domain/game";
 
+export interface RoomSession {
+  game: Game;
+  player: Player | null;
+}
+
 export interface GameRepository {
   createRoom(
     playerName: string,
@@ -10,6 +15,7 @@ export interface GameRepository {
     requestedByPlayerId: string,
     authUserId: string,
   ): Promise<{ game: Game; player: Player }>;
+  getRoomSession(code: string, authUserId: string | null): Promise<RoomSession | null>;
   getRoom(code: string): Promise<Game | null>;
   getPlayerForUser(code: string, authUserId: string): Promise<Player | null>;
   joinRoom(
