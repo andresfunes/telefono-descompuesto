@@ -80,14 +80,6 @@ export function RevealScreen({
         <p className="mt-2 text-slate-600">De la frase original al último disparate.</p>
       </div>
 
-      <RematchControls
-        currentPlayerName={playerNames.get(currentPlayerId) ?? "Jugador"}
-        hostName={playerNames.get(game.hostPlayerId ?? "") ?? "El organizador"}
-        isHost={game.hostPlayerId === currentPlayerId}
-        rematchCode={game.rematchCode}
-        roomCode={game.code}
-      />
-
       <GameCommentary
         canGenerate={canGenerateCommentary}
         chainEntryIds={Object.fromEntries(
@@ -124,6 +116,14 @@ export function RevealScreen({
           </article>
         ))}
       </GameCommentary>
+
+      <RematchControls
+        currentPlayerName={playerNames.get(currentPlayerId) ?? "Jugador"}
+        hostName={playerNames.get(game.hostPlayerId ?? "") ?? "El organizador"}
+        isHost={game.hostPlayerId === currentPlayerId}
+        rematchCode={game.rematchCode}
+        roomCode={game.code}
+      />
     </div>
   );
 }
