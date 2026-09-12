@@ -1,5 +1,6 @@
 import { MINIMUM_PLAYER_COUNT, type Game, type Player } from "@/domain/game";
 import { StartGameForm } from "./game-controls";
+import { RoomInvitation } from "./room-invitation";
 
 export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer: Player }) {
   const isHost = game.hostPlayerId === currentPlayer.id;
@@ -7,6 +8,8 @@ export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer
 
   return (
     <>
+      <RoomInvitation roomCode={game.code} />
+
       <div className="py-6">
         <h2 className="text-xl font-black">Jugadores · {game.players.length}</h2>
         <ul className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -35,10 +38,6 @@ export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer
           <p className="font-bold">Esperando a que el anfitrión comience…</p>
         </div>
       )}
-
-      <p className="mt-5 text-center text-sm text-slate-600">
-        Compartí <strong>/{game.code}</strong> con tus amigos.
-      </p>
     </>
   );
 }
