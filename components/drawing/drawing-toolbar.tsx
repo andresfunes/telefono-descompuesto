@@ -48,7 +48,7 @@ interface DrawingToolbarProps {
 }
 
 const buttonClass =
-  "grid min-h-11 min-w-11 place-items-center rounded-xl border-2 border-[var(--ink)] bg-white px-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-35";
+  "grid min-h-11 min-w-11 place-items-center rounded-xl border-2 border-[var(--ink)] bg-white px-3 text-sm font-black transition aria-pressed:bg-[var(--mint)] aria-pressed:shadow-[inset_0_0_0_3px_var(--coral)] disabled:cursor-not-allowed disabled:opacity-35";
 const colorButtonClass =
   "size-11 rounded-full border-2 border-white shadow-[0_0_0_2px_var(--ink)] transition aria-pressed:scale-90 aria-pressed:shadow-[0_0_0_4px_var(--coral)]";
 
@@ -80,7 +80,7 @@ export function DrawingToolbar({
       <div className="flex flex-wrap gap-2">
         <button
           aria-pressed={tool === "pen"}
-          className={`${buttonClass} ${tool === "pen" ? "bg-[var(--mint)]" : ""}`}
+          className={buttonClass}
           onClick={() => onToolChange("pen")}
           type="button"
         >
@@ -88,7 +88,7 @@ export function DrawingToolbar({
         </button>
         <button
           aria-pressed={tool === "eraser"}
-          className={`${buttonClass} ${tool === "eraser" ? "bg-[var(--mint)]" : ""}`}
+          className={buttonClass}
           onClick={() => onToolChange("eraser")}
           type="button"
         >
