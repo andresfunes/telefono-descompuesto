@@ -175,13 +175,13 @@ export function DrawingToolbar({
             <button
               aria-label={`Grosor ${size}`}
               aria-pressed={brushSize === size}
-              className={`${buttonClass} p-0`}
+              className={`${buttonClass} relative p-0`}
               key={size}
               onClick={() => selectBrushSize(size)}
               type="button"
             >
               <span
-                className="block rounded-full bg-[var(--ink)]"
+                className="absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--ink)]"
                 style={{ height: Math.max(5, size / 2), width: Math.max(5, size / 2) }}
               />
             </button>
@@ -204,7 +204,7 @@ export function DrawingToolbar({
               {selectedExtraBrushSize ? (
                 <>
                   <span
-                    className="block rounded-full bg-[var(--ink)]"
+                    className="absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--ink)]"
                     style={{
                       height: selectedExtraBrushSize / 2,
                       width: selectedExtraBrushSize / 2,
@@ -221,13 +221,13 @@ export function DrawingToolbar({
                 <button
                   aria-label={`Grosor ${size}`}
                   aria-pressed={brushSize === size}
-                  className={`${buttonClass} p-0`}
+                  className={`${buttonClass} relative p-0`}
                   key={size}
                   onClick={() => selectBrushSize(size, true)}
                   type="button"
                 >
                   <span
-                    className="block rounded-full bg-[var(--ink)]"
+                    className="absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--ink)]"
                     style={{ height: size / 2, width: size / 2 }}
                   />
                 </button>
