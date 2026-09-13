@@ -90,6 +90,21 @@ describe("game commentary context", () => {
     }));
   });
 
+  it("makes the merciless level explicitly stronger without insulting players", () => {
+    const input = buildCommentaryInput(revealedGame(), {}, "STRONG");
+
+    expect(input[0]).toEqual(expect.objectContaining({
+      type: "input_text",
+      text: expect.stringContaining("claramente más agresivo que Ácido"),
+    }));
+    expect(input[0]).toEqual(expect.objectContaining({
+      text: expect.stringContaining("Nunca conviertas eso en un insulto directo al jugador"),
+    }));
+    expect(input[0]).toEqual(expect.objectContaining({
+      text: expect.stringContaining("alguna puteada moderada dirigida a la situación"),
+    }));
+  });
+
   it("makes the acidic level explicitly harsher while keeping it game-focused", () => {
     const input = buildCommentaryInput(revealedGame(), {}, "STANDARD");
 

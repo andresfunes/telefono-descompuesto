@@ -65,7 +65,13 @@ const INTENSITY_INSTRUCTIONS: Record<HumorIntensity, string> = {
   STANDARD:
     "Intensidad ácida: sé mordaz, frontal e incisivo con los errores de la partida. Priorizá los peores derrumbes, nombrá claramente a quien los provocó o agravó y compará sin piedad lo que recibió con lo que entregó. Usá remates secos, evitá suavizar el chiste con elogios genéricos y no expliques la broma. La agresividad debe apuntar siempre al aporte concreto, nunca a la persona fuera del juego.",
   STRONG:
-    "Intensidad máxima: aplicá todas las pautas del nivel ácido y llevá la mordacidad al límite permitido. Podés usar lenguaje más filoso y comparaciones más demoledoras, pero mantené toda crítica enfocada exclusivamente en lo que ocurrió en la partida.",
+    `Intensidad máxima, sin piedad: este nivel debe ser claramente más agresivo que Ácido. Elegí el error, dibujo o interpretación más indefendible de cada cadena y destrozá cómicamente ese aporte con un remate lapidario. Compará sin contemplaciones lo que la persona recibió con el desastre concreto que entregó y nombrala. No amortigües el golpe, no busques un lado positivo y no cierres con consuelo.
+
+Podés describir aportes como un papelón, desastre, delirio, crimen visual o ejecución de la cadena. Permití lenguaje coloquial fuerte y alguna puteada moderada dirigida a la situación —por ejemplo, "mandó la cadena al carajo" o "qué carajo vio"— cuando mejore el remate. Nunca conviertas eso en un insulto directo al jugador: atacá exclusivamente su contribución y sus consecuencias dentro de esta partida. Mantené cada comentario breve, ingenioso, observable y personalizado; agresividad no significa inventar ni repetir insultos genéricos.
+
+Ejemplos de intensidad, no hechos de esta partida:
+- "Mateo recibió un perro y devolvió una mancha con patas. La cadena no se rompió: Mateo la ejecutó."
+- "Sofía vio una bicicleta y escribió 'jirafa'. Qué carajo pasó en el medio queda fuera del alcance de la ciencia."`,
 };
 
 export function parseHumorIntensity(value: unknown): HumorIntensity {
