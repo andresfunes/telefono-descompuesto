@@ -1,118 +1,81 @@
-# AGENTS.md
+# Repository Guidelines
 
-## Project
+## Product and Current Scope
 
-TelefonoDescompuesto.com is a mobile-first multiplayer party game
-inspired by the traditional "teléfono descompuesto" game.
+TelefonoDescompuesto.com is a mobile-first multiplayer party game. Players join
+without creating an account, alternate between text and drawings, and reveal the
+resulting chains at the end.
 
-The initial product should prioritize:
-- extremely low friction to join a game
-- no user registration for MVP
-- mobile-first UX
-- realtime multiplayer
-- fast iteration
-- simple architecture
-- shareable game results
+The current product includes six-character room URLs, anonymous Supabase sessions,
+private realtime updates, a Konva drawing editor, persisted drafts, QR/WhatsApp/link
+invitations, host lobby controls, rematches, AI commentary and awards, adaptive
+Turnstile protection, and Vercel Web Analytics. Audio, emoji, registered accounts,
+voice/video, and collaborative live drawing are not implemented in the UI.
 
-## Tech Stack
+## Stack and Project Structure
 
-- Next.js
-- React
-- TypeScript
-- App Router
-- Tailwind CSS
-- Zustand
-- Supabase PostgreSQL
-- Supabase Realtime
-- Supabase Storage
-- react-konva for drawing
+- `app/`: App Router pages, layouts, and authoritative Server Actions.
+- `components/`: lobby, turns, reveal, invitations, realtime, and drawing UI.
+- `domain/`: pure game and commentary rules; keep React out of this directory.
+- `repositories/`: interfaces plus in-memory and Supabase implementations.
+- `lib/`: Supabase clients, AI protection, invitations, draft storage, and utilities.
+- `supabase/`: migrations, local configuration, seed data, and pgTAP security tests.
+- `tests/`: Vitest unit and repository tests.
+- `public/`: static artwork and other public assets.
 
-Future integrations:
-- LiveKit for voice/video
-- OpenAI API for AI narration and game recap
+Core technologies are Next.js 16 App Router, React 19, strict TypeScript, Tailwind
+CSS, Supabase PostgreSQL/Realtime/Storage, `react-konva`, OpenAI Responses API,
+Cloudflare Turnstile, and Vercel Analytics. Keep the MVP as a Next.js monolith; do
+not introduce separate services, Redis, queues, or infrastructure without evidence.
 
-## Architecture principles
+## Game and Persistence Architecture
 
-Prefer simplicity over abstraction.
+The server owns game state, membership, assignments, submissions, round advancement,
+and reveal transitions. Clients may never decide that a round or game has finished.
+For round `r`, player `i` receives chain `(i - r) mod N`; every player therefore
+contributes once to every chain across `N` rounds.
 
-Do not introduce:
-- microservices
-- Kafka
-- Kubernetes
-- Redis
-- separate backend services
+Draw locally and upload only the submitted PNG. Never stream pointer movement.
+Persist text and vector drawing drafts in browser storage so refreshes and retryable
+errors do not erase work. Realtime broadcasts only invalidate the view; reload the
+authoritative snapshot after each event. Preserve the repository interface and keep
+the in-memory adapter usable in tests.
 
-unless there is a demonstrated need.
+Chain entries must remain extensible across `text`, `drawing`, `audio`, and `emoji`,
+even though only text and drawing are playable today.
 
-Keep the application as a Next.js monolith during the MVP.
+## UX and Security Rules
 
-## Game architecture
+Prioritize iPhone Safari, Android Chrome, and desktop Chrome/Safari. Joining requires
+only `/ABC234` plus a player name. Keep controls touch-friendly and layouts responsive
+in both portrait and landscape.
 
-The server is authoritative for:
-- game state
-- rounds
-- assignments
-- timers
-- transitions
+Never expose service keys, raw client IPs, hidden entries, or private drawing paths.
+Maintain RLS and private realtime authorization. Room codes use cryptographic
+randomness; lobbies expire, cap membership at 12, and can be locked by the host.
+Keep generic join errors, adaptive Turnstile checks, hashed-IP rate limits, and
+host-only AI generation. Treat player names, text, and drawings as untrusted input.
 
-Clients must never decide globally that a round or game has ended.
+## Coding, Testing, and Commits
 
-Drawing happens locally in the browser.
+Use focused components, two-space indentation, descriptive camelCase functions, and
+PascalCase React components. Avoid `any`, unrelated refactors, and domain logic in
+JSX. Follow existing ESLint and TypeScript settings.
 
-Do not stream drawing pointer movements in realtime.
+Run before completion:
 
-Persist the completed drawing when the player submits it.
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+```
 
-## Game model
-
-Design chain entries so new content types can be introduced later.
-
-Expected entry types:
-
-- text
-- drawing
-- audio
-- emoji
-
-Do not couple the game engine exclusively to text/drawing.
-
-## UX
-
-Mobile-first.
-
-Joining a room should require only:
-
-1. room code / invitation URL
-2. player name
-
-No account creation for MVP.
-
-Room URLs should be short:
-
-/ABC234
-
-Prioritize:
-- iPhone Safari
-- Android Chrome
-- desktop Chrome/Safari
-
-## Code quality
-
-- TypeScript strict mode
-- avoid `any`
-- small focused components
-- game logic should not live inside React components
-- separate game domain logic from UI
-- prefer pure functions for game rules
-- add tests for game assignment and round-transition logic
-
-## Commands
-
-Before considering a task complete:
-
-- run lint
-- run typecheck
-- run tests relevant to the change
+Run `pnpm supabase:test` for migrations, RLS, realtime, abuse protection, or database
+functions. Add pure tests for game rules and regression tests for drawing/utilities.
+Use Conventional Commit-style messages such as `feat: add room invitations` or
+`fix: preserve drawing draft`. Pull requests should explain behavior changes,
+validation performed, migrations/environment changes, and include screenshots for UI.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
