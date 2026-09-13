@@ -9,8 +9,9 @@ resulting chains at the end.
 The current product includes six-character room URLs, anonymous Supabase sessions,
 private realtime updates, a Konva drawing editor, persisted drafts, QR/WhatsApp/link
 invitations, host lobby controls, rematches, AI commentary and awards, adaptive
-Turnstile protection, and Vercel Web Analytics. Audio, emoji, registered accounts,
-voice/video, and collaborative live drawing are not implemented in the UI.
+Turnstile protection, Vercel Web Analytics, and a private PostgreSQL product funnel.
+Audio, emoji, registered accounts, voice/video, and collaborative live drawing are
+not implemented in the UI.
 
 ## Stack and Project Structure
 
@@ -18,7 +19,7 @@ voice/video, and collaborative live drawing are not implemented in the UI.
 - `components/`: lobby, turns, reveal, invitations, realtime, and drawing UI.
 - `domain/`: pure game and commentary rules; keep React out of this directory.
 - `repositories/`: interfaces plus in-memory and Supabase implementations.
-- `lib/`: Supabase clients, AI protection, invitations, draft storage, and utilities.
+- `lib/`: Supabase clients, AI protection, admin analytics auth, drafts, and utilities.
 - `supabase/`: migrations, local configuration, seed data, and pgTAP security tests.
 - `tests/`: Vitest unit and repository tests.
 - `public/`: static artwork and other public assets.
@@ -55,6 +56,13 @@ Maintain RLS and private realtime authorization. Room codes use cryptographic
 randomness; lobbies expire, cap membership at 12, and can be locked by the host.
 Keep generic join errors, adaptive Turnstile checks, hashed-IP rate limits, and
 host-only AI generation. Treat player names, text, and drawings as untrusted input.
+
+Core funnel events must originate from authoritative database transitions, remain
+outside the `Game` aggregate, and be idempotent. Never accept arbitrary analytics
+events or metadata from clients. Keep `private.product_events` free of room codes,
+auth user IDs, IPs, names, user-generated content, and full User-Agent strings. The
+internal `/admin/analytics` route must fail closed and keep its Basic Auth secret on
+the server. Vercel Analytics remains responsible for aggregate traffic/page views.
 
 ## Coding, Testing, and Commits
 

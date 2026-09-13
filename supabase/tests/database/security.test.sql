@@ -56,14 +56,15 @@ select results_eq(
   array[3::bigint],
   'all RLS helpers are SECURITY DEFINER functions in private'
 );
-select results_eq(
-  $$select count(*)
+select ok(
+  not exists (
+    select 1
     from pg_catalog.pg_proc procedure
     join pg_catalog.pg_namespace namespace on namespace.oid = procedure.pronamespace
     where namespace.nspname in ('public', 'private')
       and procedure.prosecdef
-      and 'search_path=""' = any(procedure.proconfig)$$,
-  array[17::bigint],
+      and not ('search_path=""' = any(procedure.proconfig))
+  ),
   'every application SECURITY DEFINER function has an empty search_path'
 );
 select results_eq(

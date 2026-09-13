@@ -56,6 +56,7 @@ NEXT_PUBLIC_TURNSTILE_SITE_KEY=...
 TURNSTILE_SECRET_KEY=...
 ABUSE_IP_HASH_SECRET=...
 AI_ENABLED=true
+ADMIN_ANALYTICS_SECRET=...
 ```
 
 Localmente, la publishable key puede ser la clave anónima y la secret key puede ser la clave `service_role`. Nunca expongas `SUPABASE_SECRET_KEY` con el prefijo `NEXT_PUBLIC_`.
@@ -131,6 +132,29 @@ El reveal ofrece humor **Suave**, **Ácido** o **Sin piedad**, siempre limitado 
 
 Los resultados quedan persistidos y se distribuyen por realtime. `AI_ENABLED=false` funciona como interruptor de emergencia sin impedir el reveal ni borrar comentarios existentes.
 
+### Analítica del funnel
+
+Vercel Web Analytics continúa midiendo páginas vistas, visitas, referidos, país, dispositivo y navegador de forma agregada. PostgreSQL registra por separado únicamente estos eventos autoritativos del producto:
+
+- `room_created`: una vez por sala creada, incluidas las revanchas;
+- `room_joined`: una vez por membresía creada, incluido el organizador;
+- `game_started`: transición única de `LOBBY` a `PLAYING`;
+- `first_submission`: primera entrada persistida de cada partida;
+- `game_finished`: transición de `PLAYING` a `REVEAL` o `FINISHED`;
+- `rematch_created`: primera relación entre una partida terminada y su revancha.
+
+Los eventos viven en `private.product_events` y contienen UUID aleatorios de partida/jugador, conteos y, para revanchas, el UUID relacionado. No guardan nombres, códigos de sala, frases, dibujos, comentarios, IDs de `auth.users`, IP, User-Agent ni metadata enviada por el navegador. Una clave generada única vuelve idempotentes los reintentos y las escrituras concurrentes. Si la inserción analítica falla, PostgreSQL emite un warning y conserva la operación del juego.
+
+La instrumentación empieza al aplicar su migración y no reconstruye eventos históricos. Como no contiene contenido de usuario ni identificadores directos, puede conservarse a largo plazo; se recomienda revisar la necesidad de retención cada 12 meses y eliminar eventos antiguos cuando ya no aporten a decisiones del producto.
+
+Para consultar el resumen y los últimos siete días desde el SQL Editor:
+
+```sql
+select public.get_product_funnel(7);
+```
+
+El dashboard interno está en `/admin/analytics`. Configurá `ADMIN_ANALYTICS_SECRET` con al menos 32 caracteres aleatorios y abrí la ruta; el navegador solicitará usuario `admin` y esa contraseña mediante HTTP Basic. Usalo únicamente sobre HTTPS. La ruta falla de forma cerrada cuando falta la variable y vuelve a validar la credencial dentro del Server Component. El secreto nunca se incluye en JavaScript del cliente.
+
 ### Rotación de cadenas
 
 En la ronda `r`, el jugador `i` recibe la cadena `(i - r) mod N`. Con `N` jugadores se juegan `N` rondas: cada participante contribuye exactamente una vez a cada cadena.
@@ -142,7 +166,7 @@ En la ronda `r`, el jugador `i` recibe la cadena `(i - r) mod N`. Con `N` jugado
 3. Ejecutá `pnpm exec supabase login` y `pnpm exec supabase link --project-ref <ref>`.
 4. Revisá con `pnpm exec supabase db push --dry-run` y aplicá con `pnpm exec supabase db push`.
 
-La migración crea tablas, constraints, índices, funciones, RLS, autorización Realtime, límites de abuso y el bucket privado. No hay que crear esos recursos manualmente en el dashboard. En producción también debés configurar Anonymous Sign-Ins, Turnstile y todas las variables de entorno en Vercel.
+Las migraciones crean tablas, constraints, índices, funciones, RLS, autorización Realtime, eventos del funnel, límites de abuso y el bucket privado. No hay que crear esos recursos manualmente en el dashboard. En producción también debés configurar Anonymous Sign-Ins, Turnstile y todas las variables de entorno en Vercel.
 
 ## Limitaciones
 
@@ -152,5 +176,6 @@ La migración crea tablas, constraints, índices, funciones, RLS, autorización 
 - Solo quien creó la partida puede generar los comentarios de IA.
 - Audio y emoji existen en el modelo, pero todavía no tienen flujo jugable.
 - No hay PWA instalable ni integración con LiveKit.
+- Las métricas del funnel comienzan desde la migración y no incluyen partidas anteriores.
 
 Las pautas de contribución están en [AGENTS.md](./AGENTS.md).

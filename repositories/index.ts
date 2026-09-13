@@ -4,11 +4,13 @@ import { SupabaseGameRepository } from "./supabase-game-repository";
 import { SupabaseGameCommentaryStore } from "./supabase-game-commentary-store";
 import { SupabaseDrawingAssetStore } from "./supabase-drawing-asset-store";
 import { SupabaseSnapshotGateway } from "./supabase-snapshot-gateway";
+import { SupabaseProductAnalyticsStore } from "./supabase-product-analytics-store";
 
 const globalRepository = globalThis as typeof globalThis & {
   gameRepository?: SupabaseGameRepository;
   gameCommentaryStore?: SupabaseGameCommentaryStore;
   drawingAssetStore?: SupabaseDrawingAssetStore;
+  productAnalyticsStore?: SupabaseProductAnalyticsStore;
 };
 
 export const gameRepository =
@@ -27,3 +29,8 @@ export const drawingAssetStore =
   globalRepository.drawingAssetStore ?? new SupabaseDrawingAssetStore();
 
 globalRepository.drawingAssetStore = drawingAssetStore;
+
+export const productAnalyticsStore =
+  globalRepository.productAnalyticsStore ?? new SupabaseProductAnalyticsStore();
+
+globalRepository.productAnalyticsStore = productAnalyticsStore;
