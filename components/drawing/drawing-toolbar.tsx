@@ -51,53 +51,76 @@ interface DrawingToolbarProps {
 
 const buttonClass =
   "grid min-h-11 min-w-11 place-items-center rounded-xl border-2 border-[var(--ink)] bg-white px-3 text-sm font-black transition aria-pressed:bg-[var(--mint)] aria-pressed:shadow-[inset_0_0_0_3px_var(--coral)] disabled:cursor-not-allowed disabled:opacity-35";
+const toolButtonClass = `${buttonClass} size-12 shrink-0 p-0 sm:size-[3.25rem]`;
 const colorButtonClass =
   "size-11 rounded-full border-2 border-white shadow-[0_0_0_2px_var(--ink)] transition aria-pressed:scale-90 aria-pressed:shadow-[0_0_0_4px_var(--coral)]";
 
 function PencilIcon() {
   return (
-    <svg aria-hidden="true" className="size-6" fill="none" viewBox="0 0 24 24">
+    <svg aria-hidden="true" className="size-8" fill="none" viewBox="0 0 24 24">
       <path
         d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Z"
         fill="currentColor"
-        opacity="0.2"
+        opacity="0.18"
         stroke="currentColor"
         strokeLinejoin="round"
-        strokeWidth="2"
+        strokeWidth="2.25"
       />
-      <path d="m14.5 7.5 3 3M5.5 16l3 3" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="m14.5 7.5 3 3M5.5 16l3 3M4 20l1.5-4 3 3L4 20Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.25"
+      />
     </svg>
   );
 }
 
 function EraserIcon() {
   return (
-    <svg aria-hidden="true" className="size-6" fill="none" viewBox="0 0 24 24">
+    <svg aria-hidden="true" className="size-8" fill="none" viewBox="0 0 24 24">
       <path
         d="m4.5 14.5 8.8-8.8a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L10 19H6.4l-1.9-1.7a2 2 0 0 1 0-2.8Z"
         fill="currentColor"
-        opacity="0.2"
+        opacity="0.16"
         stroke="currentColor"
         strokeLinejoin="round"
-        strokeWidth="2"
+        strokeWidth="2.25"
       />
-      <path d="m10.5 8.5 5 5M10 19h9" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="m10.5 8.5 5 5M10 19h9"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="2.25"
+      />
     </svg>
   );
 }
 
 function PaintBucketIcon() {
   return (
-    <svg aria-hidden="true" className="size-5 -rotate-12" fill="none" viewBox="0 0 24 24">
+    <svg
+      aria-hidden="true"
+      className="size-8 -translate-x-1 translate-y-0.5 -rotate-12"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
       <path
         d="m5 9 7-7 7 7-7 7-7-7Z"
         fill="currentColor"
-        opacity="0.2"
+        opacity="0.16"
         stroke="currentColor"
         strokeLinejoin="round"
-        strokeWidth="2"
+        strokeWidth="2.25"
       />
-      <path d="m8 12 7-7" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+      <path
+        d="m8 12 7-7M5 9l7 7 7-7"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.25"
+      />
       <path
         d="M19 13.5s2 2.2 2 3.5a2 2 0 1 1-4 0c0-1.3 2-3.5 2-3.5Z"
         fill="currentColor"
@@ -108,9 +131,52 @@ function PaintBucketIcon() {
 
 function ClearIcon() {
   return (
-    <svg aria-hidden="true" className="size-6" fill="none" viewBox="0 0 24 24">
-      <path d="M5 7h14M9 7V4h6v3M8 10v7M12 10v7M16 10v7" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
-      <path d="m7 7 1 14h8l1-14" stroke="currentColor" strokeLinejoin="round" strokeWidth="2" />
+    <svg
+      aria-hidden="true"
+      className="size-8 -translate-x-0.5"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M5 7h14M9 7V4h6v3M9 11v6M12 11v6M15 11v6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="2.25"
+      />
+      <path
+        d="m7 7 1 14h8l1-14"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="2.25"
+      />
+    </svg>
+  );
+}
+
+function UndoIcon() {
+  return (
+    <svg aria-hidden="true" className="size-7" fill="none" viewBox="0 0 24 24">
+      <path
+        d="m9 8-4 4 4 4M5 12h7a6 6 0 0 1 6 6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.5"
+      />
+    </svg>
+  );
+}
+
+function RedoIcon() {
+  return (
+    <svg aria-hidden="true" className="size-7" fill="none" viewBox="0 0 24 24">
+      <path
+        d="m15 8 4 4-4 4M19 12h-7a6 6 0 0 0-6 6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2.5"
+      />
     </svg>
   );
 }
@@ -155,7 +221,7 @@ export function DrawingToolbar({
         <button
           aria-label="Lápiz"
           aria-pressed={tool === "pen"}
-          className={`${buttonClass} p-0`}
+          className={toolButtonClass}
           onClick={() => onToolChange("pen")}
           title="Lápiz"
           type="button"
@@ -165,7 +231,7 @@ export function DrawingToolbar({
         <button
           aria-label="Borrador"
           aria-pressed={tool === "eraser"}
-          className={`${buttonClass} p-0`}
+          className={toolButtonClass}
           onClick={() => onToolChange("eraser")}
           title="Borrador"
           type="button"
@@ -175,22 +241,22 @@ export function DrawingToolbar({
         <button
           aria-label="Rellenar"
           aria-pressed={tool === "fill"}
-          className={`${buttonClass} p-0`}
+          className={toolButtonClass}
           onClick={() => onToolChange("fill")}
           title="Rellenar"
           type="button"
         >
           <PaintBucketIcon />
         </button>
-        <button aria-label="Deshacer" className={buttonClass} disabled={!canUndo} onClick={onUndo} type="button">
-          ↶
+        <button aria-label="Deshacer" className={toolButtonClass} disabled={!canUndo} onClick={onUndo} title="Deshacer" type="button">
+          <UndoIcon />
         </button>
-        <button aria-label="Rehacer" className={buttonClass} disabled={!canRedo} onClick={onRedo} type="button">
-          ↷
+        <button aria-label="Rehacer" className={toolButtonClass} disabled={!canRedo} onClick={onRedo} title="Rehacer" type="button">
+          <RedoIcon />
         </button>
         <button
           aria-label="Limpiar dibujo"
-          className={`${buttonClass} p-0`}
+          className={toolButtonClass}
           disabled={!canClear}
           onClick={onClear}
           title="Limpiar dibujo"
