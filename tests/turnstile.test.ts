@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyTurnstileToken } from "@/lib/ai/turnstile";
+
+const alwaysPassTestSecret = "1x0000000000000000000000000000000AA";
 
 const input = {
   secretKey: "secret",
@@ -8,6 +10,10 @@ const input = {
 };
 
 describe("Turnstile server verification", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("rejects a missing token without making a network request", async () => {
     const fetchImpl = vi.fn();
     await expect(
@@ -47,6 +53,60 @@ describe("Turnstile server verification", () => {
         ...input,
         token: "valid",
         expectedAction: "join_game",
+        fetchImpl,
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it("accepts Cloudflare's always-pass response outside production", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        metadata: { result_with_testing_key: true },
+      })),
+    );
+
+    await expect(
+      verifyTurnstileToken({
+        ...input,
+        secretKey: alwaysPassTestSecret,
+        token: "XXXX.DUMMY.TOKEN.XXXX",
+        fetchImpl,
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it("keeps action validation strict for test keys in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({
+        success: true,
+        metadata: { result_with_testing_key: true },
+      })),
+    );
+
+    await expect(
+      verifyTurnstileToken({
+        ...input,
+        secretKey: alwaysPassTestSecret,
+        token: "XXXX.DUMMY.TOKEN.XXXX",
+        fetchImpl,
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it("requires Cloudflare's testing marker when the action is missing", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true })),
+    );
+
+    await expect(
+      verifyTurnstileToken({
+        ...input,
+        secretKey: alwaysPassTestSecret,
+        token: "valid",
         fetchImpl,
       }),
     ).resolves.toBe(false);

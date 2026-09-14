@@ -2,11 +2,15 @@ import "server-only";
 
 const SITEVERIFY_URL =
   "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+const ALWAYS_PASS_TEST_SECRET = "1x0000000000000000000000000000000AA";
 
 interface SiteverifyResponse {
   success?: boolean;
   action?: string;
   "error-codes"?: unknown;
+  metadata?: {
+    result_with_testing_key?: boolean;
+  };
 }
 
 export interface TurnstileVerificationInput {
@@ -42,7 +46,14 @@ export async function verifyTurnstileToken({
     });
     if (!response.ok) return false;
     const result = (await response.json()) as SiteverifyResponse;
-    return result.success === true && result.action === expectedAction;
+    if (result.success !== true) return false;
+    if (result.action === expectedAction) return true;
+
+    return (
+      process.env.NODE_ENV !== "production" &&
+      secretKey === ALWAYS_PASS_TEST_SECRET &&
+      result.metadata?.result_with_testing_key === true
+    );
   } catch {
     return false;
   }

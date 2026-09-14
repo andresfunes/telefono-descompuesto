@@ -11,6 +11,7 @@ import type {
   StoredGameCommentary,
 } from "@/repositories/game-commentary-store";
 import type { CommentaryProtectionConfig } from "./commentary-protection-config";
+import { CommentaryResponseError } from "./game-commentary";
 import { logAiGeneration } from "./generation-log";
 
 export const COMMENTARY_UNAVAILABLE_MESSAGE =
@@ -125,7 +126,11 @@ export async function generateProtectedGameCommentary(
     });
     logAiGeneration("ai_generation_openai_failed", {
       ...logContext,
-      reason: error instanceof Error ? error.name : "unknown",
+      reason: error instanceof CommentaryResponseError
+        ? error.diagnosticCode
+        : error instanceof Error
+          ? error.name
+          : "unknown",
     });
     return { status: "unavailable", reason: "generation_failed" };
   }

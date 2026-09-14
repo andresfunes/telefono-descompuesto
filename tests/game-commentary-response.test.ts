@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildCommentarySchema,
   CommentaryResponseError,
   generateCommentaryWithRetry,
   parseCommentaryResponse,
@@ -94,7 +95,7 @@ describe("OpenAI commentary responses", () => {
 
     await expect(generateCommentaryWithRetry(game, request)).resolves.toHaveLength(4);
     expect(request).toHaveBeenNthCalledWith(1, 1_800);
-    expect(request).toHaveBeenNthCalledWith(2, 3_200);
+    expect(request).toHaveBeenNthCalledWith(2, 6_000);
   });
 
   it("also retries malformed JSON when the API omits incomplete status", async () => {
@@ -129,6 +130,26 @@ describe("OpenAI commentary responses", () => {
 
     await expect(generateCommentaryWithRetry(game, request)).resolves.toHaveLength(4);
     expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("constrains comments to their chain and award winners to the required entry type", () => {
+    const schema = buildCommentarySchema(game);
+    const commentVariants = schema.properties.comments.items.anyOf;
+    const awardVariants = schema.properties.awards.items.anyOf;
+    const bestDrawing = awardVariants.find(
+      (variant) => variant.properties.category.const === "BEST_DRAWING",
+    );
+    const originalPhrase = awardVariants.find(
+      (variant) => variant.properties.category.const === "MOST_ORIGINAL_PHRASE",
+    );
+
+    expect(commentVariants[0]?.properties.chain_id.const).toBe("chain-1");
+    expect(commentVariants[0]?.properties.entry_ids.items.enum).toEqual([
+      "entry-1",
+      "entry-2",
+    ]);
+    expect(bestDrawing?.properties.winner_entry_id.enum).toEqual(["entry-2"]);
+    expect(originalPhrase?.properties.winner_entry_id.enum).toEqual(["entry-1"]);
   });
 
   it("does not retry non-token incomplete responses", async () => {
