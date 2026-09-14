@@ -58,7 +58,6 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
   const fillPendingRef = useRef(false);
   const draftRef = useRef<DrawingStroke | null>(null);
   const historyRef = useRef<DrawingHistory>(EMPTY_DRAWING_HISTORY);
-  const strokeSequenceRef = useRef(0);
   const [containerWidth, setContainerWidth] = useState(0);
   const [history, setHistory] = useState<DrawingHistory>(EMPTY_DRAWING_HISTORY);
   const [draft, setDraft] = useState<DrawingStroke | null>(null);
@@ -166,7 +165,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
       const result = await floodFillPngDataUrl(source, point, color);
       if (!result) return;
       const nextRaster = {
-        id: `raster-${Date.now()}`,
+        id: `raster-${crypto.randomUUID()}`,
         tool: "raster" as const,
         dataUrl: result.dataUrl,
       };
@@ -190,9 +189,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
     }
 
     activePointerRef.current = event.evt.pointerId;
-    strokeSequenceRef.current += 1;
     const nextDraft = createStroke(
-      `stroke-${strokeSequenceRef.current}`,
+      `stroke-${crypto.randomUUID()}`,
       tool,
       color,
       brushSize,

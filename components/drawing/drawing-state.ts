@@ -120,12 +120,30 @@ export function serializeDrawingDraft(strokes: readonly DrawingElement[]): strin
   return JSON.stringify({ version: 1, strokes });
 }
 
+function withUniqueElementIds(elements: readonly DrawingElement[]): DrawingElement[] {
+  const usedIds = new Set<string>();
+
+  return elements.map((element) => {
+    const baseId = element.id;
+    let uniqueId = baseId;
+    let suffix = 2;
+
+    while (usedIds.has(uniqueId)) {
+      uniqueId = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+
+    usedIds.add(uniqueId);
+    return uniqueId === element.id ? element : { ...element, id: uniqueId };
+  });
+}
+
 export function deserializeDrawingDraft(value: string): DrawingElement[] {
   try {
     const parsed = JSON.parse(value) as { version?: unknown; strokes?: unknown };
     if (parsed.version !== 1 || !Array.isArray(parsed.strokes)) return [];
 
-    return parsed.strokes.filter((candidate): candidate is DrawingElement => {
+    const validElements = parsed.strokes.filter((candidate): candidate is DrawingElement => {
       if (!candidate || typeof candidate !== "object") return false;
       const stroke = candidate as Record<string, unknown>;
       if (stroke.tool === "raster") {
@@ -151,6 +169,7 @@ export function deserializeDrawingDraft(value: string): DrawingElement[] {
         )
       );
     });
+    return withUniqueElementIds(validElements);
   } catch {
     return [];
   }

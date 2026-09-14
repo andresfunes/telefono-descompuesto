@@ -82,6 +82,23 @@ describe("drawing state", () => {
     }))).toEqual([]);
   });
 
+  it("repairs duplicate element ids in restored drafts", () => {
+    const duplicated = [
+      penStroke("stroke-1"),
+      penStroke("stroke-1"),
+      penStroke("stroke-1-2"),
+    ];
+
+    const restored = deserializeDrawingDraft(serializeDrawingDraft(duplicated));
+
+    expect(restored.map(({ id }) => id)).toEqual([
+      "stroke-1",
+      "stroke-1-2",
+      "stroke-1-2-2",
+    ]);
+    expect(new Set(restored.map(({ id }) => id)).size).toBe(restored.length);
+  });
+
   it("keeps rasterized fills undoable and restorable", () => {
     const drawn = addStroke(EMPTY_DRAWING_HISTORY, penStroke("outline"));
     const raster = {
