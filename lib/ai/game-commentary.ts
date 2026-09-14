@@ -28,7 +28,13 @@ export function buildCommentarySchema(game: Game) {
     type: "object",
     additionalProperties: false,
     properties: {
-      text: { type: "string", minLength: 1, maxLength: 320 },
+      text: {
+        type: "string",
+        minLength: 1,
+        maxLength: 320,
+        description:
+          "Comentario factual sobre esta cadena. Toda acción atribuida a un jugador debe corresponder a un entry_id de ese autor y a su role; comparar cada dibujo sólo con su receivedEntryId.",
+      },
       chain_id: { type: "string", const: chain.id },
       entry_ids: {
         type: "array",
@@ -63,7 +69,13 @@ export function buildCommentarySchema(game: Game) {
       additionalProperties: false,
       properties: {
         category: { type: "string", const: category },
-        reason: { type: "string", minLength: 1, maxLength: 240 },
+        reason: {
+          type: "string",
+          minLength: 1,
+          maxLength: 240,
+          description:
+            `Motivo basado en winner_entry_id para ${category}. No incluir nombres de jugadores; la aplicación agrega el ganador autoritativamente.`,
+        },
         winner_entry_id: { type: "string", enum: winnerEntryIds },
         entry_ids: {
           type: "array",

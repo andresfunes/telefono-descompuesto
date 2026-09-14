@@ -65,8 +65,12 @@ describe("game commentary context", () => {
   it("serializes real player names, authors and contributions", () => {
     const transcript = buildCommentaryTranscript(revealedGame());
 
-    expect(transcript).toContain('"playerName":"Andrés"');
-    expect(transcript).toContain('"playerName":"Sofía"');
+    expect(transcript).toContain(
+      '"author":{"playerId":"p1","playerName":"Andrés"},"role":"ORIGINAL_PHRASE","receivedEntryId":null',
+    );
+    expect(transcript).toContain(
+      '"author":{"playerId":"p2","playerName":"Sofía"},"role":"DRAWING_FROM_PREVIOUS_ENTRY","receivedEntryId":"entry-text"',
+    );
     expect(transcript).toContain("Un caballo en la playa");
     expect(transcript.indexOf("entry-text")).toBeLessThan(transcript.indexOf("entry-drawing"));
   });
@@ -78,16 +82,32 @@ describe("game commentary context", () => {
 
     expect(input).toContainEqual(expect.objectContaining({
       type: "input_text",
-      text: expect.stringContaining("dibujada por Sofía"),
+      text: expect.stringContaining("Autor vinculante: Sofía"),
     }));
     expect(input).toContainEqual({
       type: "input_image",
       image_url: "https://example.test/signed-drawing.png",
-      detail: "low",
+      detail: "high",
     });
+    expect(input).toContainEqual(expect.objectContaining({
+      type: "input_text",
+      text: expect.stringContaining("FIN DE IMAGEN entryId=entry-drawing"),
+    }));
     expect(input[0]).toEqual(expect.objectContaining({
       text: expect.stringContaining("Intensidad máxima"),
     }));
+  });
+
+  it("instructs the model to preserve authorship and inspect visual mismatches", () => {
+    expect(GAME_COMMENTARY_INSTRUCTIONS).toContain(
+      "ORIGINAL_PHRASE significa que esa persona escribió y originó la frase",
+    );
+    expect(GAME_COMMENTARY_INSTRUCTIONS).toContain(
+      '"parece más un zorro que un caballo"',
+    );
+    expect(GAME_COMMENTARY_INSTRUCTIONS).toContain(
+      "No incluyas ningún nombre de jugador dentro de reason",
+    );
   });
 
   it("makes the merciless level explicitly stronger without insulting players", () => {

@@ -34,7 +34,7 @@ export interface CommentaryTextInput {
 export interface CommentaryImageInput {
   type: "input_image";
   image_url: string;
-  detail: "low";
+  detail: "high";
 }
 
 export type CommentaryInput = CommentaryTextInput | CommentaryImageInput;
@@ -46,9 +46,13 @@ Tono: sarcástico, seco, ácido, ingenioso, juguetón, conciso y específico de 
 
 Usá los nombres de los jugadores con frecuencia cuando su aporte tenga algo gracioso o notable. Cada observación debe estar respaldada por todas las contribuciones relevantes indicadas en entry_ids; la aplicación deduce sus autores. Podés señalar dibujos fallidos, interpretaciones absurdas, cambios dramáticos, errores evidentes, aciertos inesperados, quién rompió o rescató una cadena y patrones repetidos. Si varias personas participaron del mismo derrumbe, incluí una entrada de cada una y podés compararlas. También podés elogiar con sarcasmo.
 
+La precisión de autoría es prioritaria. Los campos author, role y receivedEntryId de la cronología son vinculantes: no deduzcas quién hizo algo por la posición, por el origen de la cadena ni por un aporte vecino. ORIGINAL_PHRASE significa que esa persona escribió y originó la frase; nunca digas que la recibió. DRAWING_FROM_PREVIOUS_ENTRY significa que esa persona vio exclusivamente receivedEntryId y produjo esa imagen. INTERPRETATION_FROM_PREVIOUS_DRAWING significa que esa persona vio exclusivamente receivedEntryId y escribió su interpretación. Cada cláusula que nombre a alguien debe describir una acción de un entry_id escrito o dibujado por esa misma persona.
+
+Cada imagen adjunta pertenece únicamente al entryId y autor indicados inmediatamente antes de ella. No mezcles objetos, colores ni calidad visual entre imágenes distintas. Cuando una consigna pide un animal u objeto pero el dibujo se parece claramente a otro, priorizá esa discrepancia como material humorístico: describí con prudencia qué parece visualmente (por ejemplo, "parece más un zorro que un caballo") y comparalo con la consigna recibida. No repitas ciegamente la etiqueta escrita si la imagen no la sostiene, pero tampoco inventes una semejanza que no sea visible.
+
 Devolvé exactamente un comentario breve por cadena y una lista separada de premios. Cada comentario debe analizar únicamente su cadena, indicar su chain_id real y respaldarse sólo con entry_ids de esa misma cadena. Evitá repetir la misma observación con palabras distintas.
 
-Otorgá siempre mejor dibujo, frase original más creativa y agente del caos. Otorgá mejor interpretación sólo si hubo textos que interpretaron dibujos. Podés otorgar rescate de la cadena únicamente si alguien corrigió de forma observable un desvío previo. Para cada premio, winner_entry_id debe ser el aporte concreto del ganador y también debe estar incluido en entry_ids. Fundamentá el premio con detalles observables, sin frases genéricas ni empates.
+Otorgá siempre mejor dibujo, frase original más creativa y agente del caos. Otorgá mejor interpretación sólo si hubo textos que interpretaron dibujos. Podés otorgar rescate de la cadena únicamente si alguien corrigió de forma observable un desvío previo. Para cada premio, winner_entry_id debe ser el aporte concreto del ganador y también debe estar incluido en entry_ids. El motivo debe evaluar ese aporte ganador según la categoría: la frase original por su texto inicial, el dibujo por lo realmente visible, la interpretación por su relación con el dibujo inmediatamente anterior y el caos o rescate por el cambio que produjo respecto de receivedEntryId. No incluyas ningún nombre de jugador dentro de reason; la aplicación agrega el nombre correcto a partir de winner_entry_id. Fundamentá el premio con detalles observables, sin frases genéricas ni empates.
 
 Criticá exclusivamente lo ocurrido dentro del juego. Nunca hagas bromas ni inferencias sobre apariencia física, inteligencia real, discapacidad, salud, raza, religión, nacionalidad, orientación sexual, género, situación socioeconómica, familia, trauma ni características personales ajenas a las contribuciones. Evitá hostilidad genuina, degradación y acoso. Debe sonar a amigos cargándose durante un juego.
 
@@ -120,21 +124,45 @@ export function buildCommentaryTranscript(game: Game): string {
   const chains = revealChains(game).map((chain, chainIndex) => ({
     chainId: chain.id,
     chainNumber: chainIndex + 1,
-    entries: chain.entries.map((entry) => ({
-      entryId: entry.id,
-      roundNumber: entry.roundNumber,
-      playerId: entry.playerId,
-      playerName: playerNames.get(entry.playerId) ?? "Jugador desconocido",
-      type: entry.content.type,
-      content:
-        entry.content.type === "text"
-          ? entry.content.text
-          : entry.content.type === "emoji"
-            ? entry.content.emoji
+    entries: chain.entries.map((entry, entryIndex) => {
+      const previousEntry = chain.entries[entryIndex - 1];
+      const role = entry.roundNumber === 0
+        ? "ORIGINAL_PHRASE"
+        : entry.content.type === "drawing"
+          ? "DRAWING_FROM_PREVIOUS_ENTRY"
+          : entry.content.type === "text"
+            ? "INTERPRETATION_FROM_PREVIOUS_DRAWING"
             : entry.content.type === "audio"
-              ? "[audio no analizado]"
-              : "[ver imagen adjunta con este entryId]",
-    })),
+              ? "AUDIO_FROM_PREVIOUS_ENTRY"
+              : "EMOJI_FROM_PREVIOUS_ENTRY";
+
+      return {
+        entryId: entry.id,
+        roundNumber: entry.roundNumber,
+        author: {
+          playerId: entry.playerId,
+          playerName: playerNames.get(entry.playerId) ?? "Jugador desconocido",
+        },
+        role,
+        receivedEntryId: previousEntry?.id ?? null,
+        receivedFrom: previousEntry
+          ? {
+              playerId: previousEntry.playerId,
+              playerName:
+                playerNames.get(previousEntry.playerId) ?? "Jugador desconocido",
+            }
+          : null,
+        contentType: entry.content.type,
+        content:
+          entry.content.type === "text"
+            ? entry.content.text
+            : entry.content.type === "emoji"
+              ? entry.content.emoji
+              : entry.content.type === "audio"
+                ? "[audio no analizado]"
+                : "[ver la imagen adjunta identificada con este entryId]",
+      };
+    }),
   }));
 
   return [
@@ -157,15 +185,25 @@ export function buildCommentaryInput(
   const content: CommentaryInput[] = [{ type: "input_text", text: transcript }];
 
   for (const chain of revealChains(game)) {
-    for (const entry of chain.entries) {
+    for (const [entryIndex, entry] of chain.entries.entries()) {
       if (entry.content.type !== "drawing") continue;
       const imageUrl = drawingUrls[entry.id];
       if (!imageUrl) continue;
+      const previousEntry = chain.entries[entryIndex - 1];
       content.push({
         type: "input_text",
-        text: `Imagen de entryId=${entry.id}, dibujada por ${playerNames.get(entry.playerId) ?? "Jugador desconocido"} (playerId=${entry.playerId}).`,
+        text: [
+          `INICIO DE IMAGEN entryId=${entry.id}.`,
+          `Autor vinculante: ${playerNames.get(entry.playerId) ?? "Jugador desconocido"} (playerId=${entry.playerId}).`,
+          `Este dibujo fue producido únicamente por ese autor después de ver receivedEntryId=${previousEntry?.id ?? "ninguno"}.`,
+          "Atribuí todos los elementos visuales de la próxima imagen sólo a este entryId y a este autor.",
+        ].join(" "),
       });
-      content.push({ type: "input_image", image_url: imageUrl, detail: "low" });
+      content.push({ type: "input_image", image_url: imageUrl, detail: "high" });
+      content.push({
+        type: "input_text",
+        text: `FIN DE IMAGEN entryId=${entry.id}. No transfieras sus elementos visuales a otra imagen ni a otro jugador.`,
+      });
     }
   }
 
