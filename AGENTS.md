@@ -38,7 +38,9 @@ contributes once to every chain across `N` rounds.
 
 Draw locally and upload only the submitted PNG. Never stream pointer movement.
 Persist text and vector drawing drafts in browser storage so refreshes and retryable
-errors do not erase work. Realtime broadcasts only invalidate the view; reload the
+errors do not erase work. Every vector or raster drawing element needs a globally
+unique, stable ID; sanitize restored legacy drafts before rendering so React/Konva
+keys never collide. Realtime broadcasts only invalidate the view; reload the
 authoritative snapshot after each event. Preserve the repository interface and keep
 the in-memory adapter usable in tests.
 
@@ -56,6 +58,12 @@ Maintain RLS and private realtime authorization. Room codes use cryptographic
 randomness; lobbies expire, cap membership at 12, and can be locked by the host.
 Keep generic join errors, adaptive Turnstile checks, hashed-IP rate limits, and
 host-only AI generation. Treat player names, text, and drawings as untrusted input.
+
+AI commentary attribution must follow the authoritative entry author, semantic role,
+and received-entry relationship; never infer authorship from chain position or nearby
+content. Bind every supplied image to its drawing entry and author, validate structured
+output against real chain/category entry IDs, and derive displayed award winners from
+the validated winning entry rather than model-written names.
 
 Core funnel events must originate from authoritative database transitions, remain
 outside the `Game` aggregate, and be idempotent. Never accept arbitrary analytics

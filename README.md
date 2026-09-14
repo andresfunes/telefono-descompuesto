@@ -12,7 +12,8 @@ El flujo clásico permite:
 - jugar rondas alternadas de texto y dibujo;
 - mostrar una de 100 frases visuales aleatorias como inspiración inicial;
 - dibujar con lápiz, goma, relleno, 12 colores, siete grosores y deshacer/rehacer;
-- ver el tamaño del lápiz o borrador sobre el lienzo y dibujar puntos sin arrastrar;
+- usar controles de dibujo grandes y táctiles, ver el tamaño del lápiz o borrador
+  sobre el lienzo y dibujar puntos sin arrastrar;
 - sincronizar lobby, jugadores pendientes, rondas y reveal automáticamente;
 - refrescar o reintentar sin perder el texto ni el dibujo en curso;
 - generar comentarios personalizados por cadena y premios de la partida;
@@ -20,6 +21,9 @@ El flujo clásico permite:
 - registrar páginas vistas y visitas agregadas con Vercel Web Analytics.
 
 Los dibujos se editan como vectores con `react-konva`, se exportan a PNG y se guardan en un bucket privado. PostgreSQL conserva el estado autoritativo.
+Cada elemento vectorial o rasterizado recibe un identificador único; al recuperar un
+borrador antiguo también se corrigen identificadores repetidos para evitar trazos
+duplicados, omitidos o inestables durante el render.
 
 ## Cómo se juega
 
@@ -128,7 +132,13 @@ Los clientes reciben `GAME_CHANGED` por un Broadcast privado `game:<uuid>`. El e
 
 ### Comentarios y premios
 
-El reveal ofrece humor **Suave**, **Ácido** o **Sin piedad**, siempre limitado a las contribuciones observables de la partida. OpenAI recibe nombres, textos y URLs firmadas temporales de los dibujos únicamente cuando el organizador solicita el veredicto. Los comentarios aparecen debajo de su cadena y los premios al final: mejor dibujante, frase más original, mejor interpretación cuando corresponde, agente del caos y rescate de la cadena.
+El reveal ofrece humor **Suave**, **Ácido** o **Sin piedad**, siempre limitado a las contribuciones observables de la partida. OpenAI recibe nombres, textos y URLs firmadas temporales de los dibujos únicamente cuando el organizador solicita el veredicto. Cada aporte incluye autor, rol y entrada recibida de forma explícita; las imágenes se envían con detalle alto y quedan delimitadas por su entrada para reducir cruces de autoría y detectar discrepancias visuales —por ejemplo, cuando el animal dibujado se parece claramente a otro—. Los comentarios aparecen debajo de su cadena y los premios al final: mejor dibujante, frase más original, mejor interpretación cuando corresponde, agente del caos y rescate de la cadena.
+
+La salida estructurada restringe cada comentario a su cadena y cada premio a entradas
+compatibles con su categoría. Los nombres de los ganadores se derivan en la aplicación
+desde la entrada validada, no desde texto libre del modelo. Las respuestas incompletas
+o inválidas se reintentan con un presupuesto mayor y los logs registran un código de
+diagnóstico sin incluir contenido de los jugadores.
 
 Los resultados quedan persistidos y se distribuyen por realtime. `AI_ENABLED=false` funciona como interruptor de emergencia sin impedir el reveal ni borrar comentarios existentes.
 
