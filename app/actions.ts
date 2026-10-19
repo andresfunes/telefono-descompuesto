@@ -419,3 +419,26 @@ export async function generateCommentary(
     return { error: COMMENTARY_UNAVAILABLE_MESSAGE, analytics: "unavailable" };
   }
 }
+
+export async function changeRevealStep(_previousState: FormState, formData: FormData): Promise<FormState> {
+  const code = normalizeRoomCode(String(formData.get("roomCode") ?? ""));
+  const rawStep = formData.get("step");
+  const rawExpected = formData.get("expectedStep");
+  const step = typeof rawStep === "string" && rawStep !== "" ? Number(rawStep) : NaN;
+  const expected = rawExpected === "summary" ? null :
+    typeof rawExpected === "string" && rawExpected !== "" ? Number(rawExpected) : NaN;
+  if (!isValidRoomCode(code) || !Number.isInteger(step) ||
+    (expected !== null && !Number.isInteger(expected))) return { error: "El paso no es válido." };
+  const authUserId = await getAuthenticatedUserId();
+  if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
+  const player = await gameRepository.getPlayerForUser(code, authUserId);
+  if (!player) return { error: "No pertenecés a esta sala." };
+  try {
+    await gameRepository.setRevealStep(code, player.id, authUserId, expected, step);
+  } catch (error) {
+    revalidatePath(`/${code}`);
+    return { error: expectedErrorMessage(error) ?? "No pudimos cambiar la carta. Intentá de nuevo." };
+  }
+  revalidatePath(`/${code}`);
+  return {};
+}

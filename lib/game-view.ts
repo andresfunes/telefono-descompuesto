@@ -1,4 +1,5 @@
 import "server-only";
+import { visibleRevealEntries } from "@/domain/reveal";
 
 import {
   previousEntryForPlayer,
@@ -14,7 +15,7 @@ export async function resolveVisibleDrawingUrls(
 ): Promise<Record<string, string>> {
   let entries: ChainEntry[] = [];
   if (game.phase === "REVEAL" || game.phase === "FINISHED") {
-    entries = game.chains.flatMap((chain) => chain.entries);
+    entries = visibleRevealEntries(game);
   } else if (game.phase === "PLAYING") {
     const previousEntry = previousEntryForPlayer(game, playerId);
     if (previousEntry) entries = [previousEntry];

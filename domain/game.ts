@@ -81,6 +81,8 @@ export interface Game {
   chains: Chain[];
   currentRound: Round | null;
   rematchCode: string | null;
+  /** null/undefined keeps legacy games in the complete summary. */
+  revealStep?: number | null;
   lobbyLocked: boolean;
   lobbyExpiresAt: Date;
 }
@@ -495,7 +497,7 @@ export function advanceRound(game: Game): Game {
     throw new GameRuleError("ROUND_INCOMPLETE", "Todavía faltan respuestas para avanzar.");
   }
   if (arePlayableRoundsComplete(game)) {
-    return { ...game, phase: "REVEAL", currentRound: null };
+    return { ...game, phase: "REVEAL", currentRound: null, revealStep: -1 };
   }
 
   const nextRoundNumber = game.currentRound.number + 1;

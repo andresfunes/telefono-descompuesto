@@ -1,4 +1,6 @@
 import Image from "next/image";
+import { isRevealSummary, revealSlides } from "@/domain/reveal";
+import { RevealControls } from "./reveal-controls";
 import {
   revealChains,
   type ChainEntry,
@@ -19,7 +21,7 @@ function DrawingReveal({
   return source ? (
     <Image
       alt="Dibujo de la cadena"
-      className="h-auto w-full rounded-xl border border-slate-200 bg-white object-contain"
+      className="max-h-[50svh] h-auto w-full rounded-xl border border-slate-200 bg-white object-contain"
       height={720}
       src={source}
       unoptimized
@@ -48,7 +50,7 @@ function EntryContent({
         />
       );
     case "audio":
-      return <p className="text-lg font-bold">🔊 {entry.content.storagePath}</p>;
+      return <p className="text-lg font-bold">🔊 Audio</p>;
     case "emoji":
       return <p className="text-4xl">{entry.content.emoji}</p>;
   }
@@ -71,6 +73,46 @@ export function RevealScreen({
 }) {
   const playerNames = new Map(game.players.map((player) => [player.id, player.name]));
   const chains = revealChains(game);
+  const slides = revealSlides(game);
+  const summary = isRevealSummary(game);
+  const slide = slides[game.revealStep ?? -1];
+  const isHost = game.hostPlayerId === currentPlayerId;
+  const hostName = playerNames.get(game.hostPlayerId ?? "") ?? "El anfitrión";
+
+  if (!summary) {
+    return (
+      <section className="py-6" aria-label="Presentación sincronizada">
+        <div className="mb-5 text-center">
+          <p className="text-sm font-black uppercase tracking-widest text-slate-500">Revelación en vivo</p>
+          <h2 className="mt-2 text-2xl font-black">Una carta, una sorpresa</h2>
+          <p className="mt-2 text-sm text-slate-600">{isHost ? "Dirigís la presentación" : `${hostName} dirige la presentación`}</p>
+        </div>
+        <div aria-live="polite" aria-atomic="true">
+          {slide ? (
+            <article key={slide.entry.id} className="rounded-3xl border-2 border-[var(--ink)] bg-[var(--cream)] p-4 sm:p-6">
+              <p className="text-sm font-bold text-slate-600">Cadena {slide.chainIndex + 1} de {chains.length} · Aporte {slide.entryIndex + 1} de {slide.chain.entries.length}</p>
+              <h3 className="mb-4 mt-2 text-xl font-black">
+                {slide.entry.roundNumber === 0 ? "Frase original" : slide.entry.content.type === "drawing" ? "Dibujo" : slide.entry.content.type === "text" ? "Interpretación" : "Aporte"}
+              </h3>
+              <div className="grid min-h-40 place-items-center break-words rounded-2xl bg-white p-4 text-center">
+                <EntryContent drawingUrls={drawingUrls} entry={slide.entry} />
+              </div>
+              <p className="mt-4 text-center text-sm">Por <strong>{playerNames.get(slide.entry.playerId) ?? "Jugador"}</strong></p>
+            </article>
+          ) : (
+            <div className="rounded-3xl border-2 border-dashed border-slate-300 bg-[var(--cream)] p-8 text-center">
+              <span className="text-5xl" aria-hidden="true">🎬</span>
+              <h3 className="mt-4 text-xl font-black">¡Que empiece la revelación!</h3>
+              <p className="mt-2 text-slate-600">{isHost ? "Cuando estén todos listos, revelá la primera carta." : `Esperando a que ${hostName} revele la primera carta…`}</p>
+            </div>
+          )}
+          <p className="mt-4 text-center text-sm text-slate-500">Carta {Math.max(0, (game.revealStep ?? -1) + 1)} de {slides.length}</p>
+        </div>
+        {isHost ? <RevealControls roomCode={game.code} step={game.revealStep ?? null} total={slides.length} /> :
+          <p className="mt-5 text-center text-sm text-slate-600">Las cartas avanzan para todos al mismo tiempo.</p>}
+      </section>
+    );
+  }
 
   return (
     <div className="py-6">
@@ -87,6 +129,8 @@ export function RevealScreen({
           </p>
         )}
       </div>
+
+      {isHost && <RevealControls roomCode={game.code} step={game.revealStep ?? null} total={slides.length} />}
 
       <GameCommentary
         canGenerate={canGenerateCommentary}

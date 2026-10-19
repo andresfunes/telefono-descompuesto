@@ -16,6 +16,7 @@ El flujo clásico permite:
   sobre el lienzo y dibujar puntos sin arrastrar;
 - sincronizar lobby, jugadores pendientes, rondas y reveal automáticamente;
 - refrescar o reintentar sin perder el texto ni el dibujo en curso;
+- revelar las cartas una a una, sincronizadas para todos y controladas por el anfitrión;
 - generar comentarios personalizados por cadena y premios de la partida;
 - crear una revancha y notificar al resto mediante un modal descartable;
 - registrar páginas vistas y visitas agregadas con Vercel Web Analytics.
@@ -32,7 +33,7 @@ duplicados, omitidos o inestables durante el render.
 3. Cada jugador escribe una frase original.
 4. El grupo alterna entre dibujar lo recibido e interpretar el dibujo anterior.
 5. La pantalla de espera agrupa quién sigue trabajando y quién ya terminó.
-6. Tras una contribución de cada persona en cada cadena, se revela la cronología.
+6. Al terminar los turnos, el anfitrión revela cada carta en orden para todo el grupo. Puede retroceder o mostrar el resumen completo.
 7. El organizador puede generar el veredicto con IA y comenzar otra partida.
 
 ## Requisitos
@@ -130,6 +131,25 @@ Los clientes reciben `GAME_CHANGED` por un Broadcast privado `game:<uuid>`. El e
 - Solo el organizador puede solicitar comentarios. La respuesta se valida contra jugadores, cadenas y entradas reales antes de persistirse para todo el grupo.
 - Los comentarios requieren Turnstile y una reserva atómica por `game_id`; los límites y el cupo diario viven en tablas privadas de PostgreSQL.
 - Vercel provee la IP mediante `x-vercel-forwarded-for`; fuera de Vercel en producción se usa un bucket conservador sin confiar en headers arbitrarios.
+
+### Presentación sincronizada
+
+Las nuevas partidas llegan a una pantalla de espera al terminar. El anfitrión controla
+la primera carta, el avance, el retroceso y el acceso al resumen. Cada carta muestra
+su autor y posición dentro de la cadena; las cadenas con turnos salteados conservan
+el orden de las entregas disponibles. El resumen habilita comentarios, premios y
+revancha, y permite volver a presentar.
+
+El cursor se persiste en PostgreSQL. Las acciones validan la sesión, el anfitrión y
+el paso esperado para evitar saltos por solicitudes duplicadas. Realtime invalida
+la pantalla y cada participante vuelve a leer el estado autoritativo; recargar o
+reconectar conserva el paso compartido. Durante la presentación no se envían cartas
+futuras ni se firman sus dibujos, y RLS bloquea las lecturas directas de entregas y
+comentarios hasta el resumen. Volver atrás no revoca contenido ya visto o descargado.
+
+Aplicar `20261018120000_synchronized_reveal.sql` antes de desplegar esta versión.
+No requiere variables nuevas. Las partidas que ya estaban en revelación conservan
+su resumen, desde el que el anfitrión puede iniciar la presentación.
 
 ### Comentarios y premios
 

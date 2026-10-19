@@ -104,6 +104,14 @@ export class SupabaseSnapshotGateway implements GameSnapshotGateway {
     if (error) throw error;
   }
 
+  async setRevealStep(code: string, authUserId: string, expectedStep: number | null, step: number): Promise<boolean> {
+    const { data, error } = await createAdminClient().rpc("set_game_reveal_step", {
+      p_code: code, p_auth_user_id: authUserId, p_expected_step: expectedStep, p_step: step,
+    });
+    if (error) throw rpcFailure(error);
+    return data === true;
+  }
+
   async commitGame({ game, expectedVersion, event }: PersistedGameCommit): Promise<boolean> {
     const { data, error } = await createAdminClient().rpc("commit_game_snapshot", {
       p_chains: serializeChains(game.chains),

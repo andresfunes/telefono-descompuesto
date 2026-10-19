@@ -1,3 +1,5 @@
+import { InMemoryGameRepository } from "@/repositories/in-memory-game-repository";
+import { setRevealStep } from "@/domain/reveal";
 import { describe, expect, it } from "vitest";
 import {
   removePlayerFromGame,
@@ -41,6 +43,7 @@ function snapshotFromGame(
       version,
       created_at: game.createdAt.toISOString(),
       rematch_code: game.rematchCode,
+      reveal_step: game.revealStep ?? null,
       lobby_locked: game.lobbyLocked,
       lobby_expires_at: game.lobbyExpiresAt.toISOString(),
     },
@@ -206,6 +209,17 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
       code,
       snapshotFromGame(updated, loaded.version + 1, this.identities),
     );
+  }
+
+  async setRevealStep(code: string, authUserId: string, expectedStep: number | null, step: number): Promise<boolean> {
+    const snapshot = this.snapshots.get(code);
+    const host = snapshot?.players.find((p) => p.id === snapshot.game.host_player_id);
+    if (!snapshot || host?.auth_user_id !== authUserId) throw new Error("NOT_HOST");
+    if (snapshot.game.reveal_step !== expectedStep) return false;
+    const loaded = deserializeGameSnapshot(snapshot);
+    const updated = setRevealStep(loaded.game, host.id, expectedStep, step);
+    this.snapshots.set(code, snapshotFromGame(updated, loaded.version + 1, this.identities));
+    return true;
   }
 
   async commitGame(input: PersistedGameCommit): Promise<boolean> {
@@ -484,5 +498,32 @@ describe("SupabaseGameRepository", () => {
     expect(rematch.game).toMatchObject({ phase: "LOBBY", rematchCode: null });
     expect(rematch.player.name).toBe("Ana");
     expect(source?.rematchCode).toBe(rematch.game.code);
+  });
+});
+
+
+describe.each(["memory", "supabase"])("%s synchronized reveal", (adapter) => {
+  it("persists the host cursor, rejects impersonation and stale requests, and resumes for guests", async () => {
+    const repository = adapter === "memory" ? new InMemoryGameRepository() :
+      new SupabaseGameRepository(new FakeSnapshotGateway());
+    const { game, player: host } = await repository.createRoom("Host", "host-user");
+    const { player: guest } = await repository.joinRoom(game.code, "Guest", "guest-user");
+    await repository.startGame(game.code, host.id, "host-user");
+    for (const [player, user] of [[host, "host-user"], [guest, "guest-user"]] as const) {
+      await repository.submitEntry(game.code, { playerId: player.id, roundNumber: 0,
+        content: { type: "text", text: "Una jirafa en bicicleta" } }, user);
+    }
+    for (const [player, user] of [[host, "host-user"], [guest, "guest-user"]] as const) {
+      await repository.submitEntry(game.code, { playerId: player.id, roundNumber: 1,
+        content: { type: "drawing", asset: { kind: "storage-path", value: "games/test/drawing.png", mimeType: "image/png" } } }, user);
+    }
+    expect((await repository.getRoom(game.code))?.revealStep).toBe(-1);
+    await expect(repository.setRevealStep(game.code, guest.id, "guest-user", -1, 0)).rejects.toThrow();
+    await expect(repository.setRevealStep(game.code, host.id, "guest-user", -1, 0)).rejects.toThrow();
+    await repository.setRevealStep(game.code, host.id, "host-user", -1, 0);
+    await expect(repository.setRevealStep(game.code, host.id, "host-user", -1, 1)).rejects.toThrow();
+    expect((await repository.getRoomSession(game.code, "guest-user"))?.game.revealStep).toBe(0);
+    await repository.setRevealStep(game.code, host.id, "host-user", 0, 4);
+    expect((await repository.getRoom(game.code))?.revealStep).toBe(4);
   });
 });

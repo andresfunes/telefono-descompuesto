@@ -294,6 +294,9 @@ reset role;
 update public.games
 set phase = 'REVEAL'
 where id = '20000000-0000-0000-0000-000000000001';
+-- Open the complete summary before testing direct member reads.
+update public.games set reveal_step = 1
+where id = '20000000-0000-0000-0000-000000000001';
 select public.save_game_commentary(
   '20000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',

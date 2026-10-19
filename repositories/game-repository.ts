@@ -41,6 +41,13 @@ export interface GameRepository {
     authUserId: string,
     playerId: string,
   ): Promise<Game>;
+  setRevealStep(
+    code: string,
+    requestedByPlayerId: string,
+    authUserId: string,
+    expectedStep: number | null,
+    step: number,
+  ): Promise<Game>;
   startGame(
     code: string,
     requestedByPlayerId: string,

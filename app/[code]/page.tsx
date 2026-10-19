@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isRevealSummary } from "@/domain/reveal";
 import { notFound } from "next/navigation";
 import { GameRealtime } from "@/components/game-realtime";
 import { JoinGameForm } from "@/components/game-form";
@@ -43,7 +44,7 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
       process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
   );
   const savedCommentary =
-    game.phase === "REVEAL" || game.phase === "FINISHED"
+    (game.phase === "REVEAL" || game.phase === "FINISHED") && isRevealSummary(game)
       ? await gameCommentaryStore.getByRoomCode(code)
       : null;
   const isDrawingTurn =

@@ -1,3 +1,4 @@
+import { setRevealStep as updateRevealStep } from "@/domain/reveal";
 import {
   GameRuleError,
   generateRoomCode,
@@ -48,6 +49,7 @@ export interface GameSnapshotGateway {
   loadGameForUser(code: string, authUserId: string): Promise<unknown | null>;
   setLobbyLocked(code: string, authUserId: string, locked: boolean): Promise<void>;
   removePlayer(code: string, authUserId: string, playerId: string): Promise<void>;
+  setRevealStep(code: string, authUserId: string, expectedStep: number | null, step: number): Promise<boolean>;
   commitGame(input: PersistedGameCommit): Promise<boolean>;
 }
 
@@ -260,6 +262,7 @@ export function deserializeGameSnapshot(value: unknown): LoadedGame {
       chains,
       currentRound,
       rematchCode: nullableStringField(gameRow, "rematch_code"),
+      revealStep: gameRow.reveal_step == null ? null : integerField(gameRow, "reveal_step"),
       lobbyLocked: gameRow.lobby_locked === true,
       lobbyExpiresAt: dateField(gameRow, "lobby_expires_at"),
     },
@@ -578,6 +581,22 @@ export class SupabaseGameRepository implements GameRepository {
       if (committed) return updated;
     }
     throw new ConcurrentGameUpdateError("La partida cambió varias veces. Intentá de nuevo.");
+  }
+
+  async setRevealStep(code: string, requestedByPlayerId: string, authUserId: string,
+    expectedStep: number | null, step: number): Promise<Game> {
+    const normalizedCode = normalizeRoomCode(code);
+    const loaded = await this.load(normalizedCode);
+    if (!loaded) throw new RoomNotFoundError("La sala no existe.");
+    if (loaded.playerIdByAuthUserId.get(authUserId) !== requestedByPlayerId) {
+      throw new UnauthorizedGameActionError("No podés modificar a otro jugador.");
+    }
+    updateRevealStep(loaded.game, requestedByPlayerId, expectedStep, step);
+    const committed = await this.gateway.setRevealStep(normalizedCode, authUserId, expectedStep, step);
+    if (!committed) throw new ConcurrentGameUpdateError("La presentación cambió. Volvé a intentar.");
+    const updated = await this.load(normalizedCode);
+    if (!updated) throw new RoomNotFoundError("La sala no existe.");
+    return updated.game;
   }
 
   async startGame(

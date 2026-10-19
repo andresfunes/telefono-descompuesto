@@ -1,3 +1,4 @@
+import { setRevealStep as updateRevealStep } from "@/domain/reveal";
 import {
   addRematch,
   createLobbyGame,
@@ -212,6 +213,19 @@ export class InMemoryGameRepository implements GameRepository {
         }
       }
     }
+    return structuredClone(updated);
+  }
+
+  async setRevealStep(code: string, requestedByPlayerId: string, authUserId: string,
+    expectedStep: number | null, step: number): Promise<Game> {
+    const normalizedCode = normalizeRoomCode(code);
+    const game = this.rooms.get(normalizedCode);
+    if (!game) throw new RoomNotFoundError("La sala no existe.");
+    if (this.memberships.get(normalizedCode)?.get(authUserId) !== requestedByPlayerId) {
+      throw new UnauthorizedGameActionError("No podés modificar a otro jugador.");
+    }
+    const updated = updateRevealStep(game, requestedByPlayerId, expectedStep, step);
+    this.rooms.set(normalizedCode, updated);
     return structuredClone(updated);
   }
 
