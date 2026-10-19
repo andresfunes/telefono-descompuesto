@@ -8,7 +8,7 @@ El flujo clásico permite:
 
 - crear y entrar a salas de seis caracteres con una sesión anónima, sin registro;
 - invitar mediante QR, WhatsApp o un enlace copiable;
-- bloquear el lobby, expulsar intrusos y admitir hasta 12 jugadores;
+- bloquear el lobby, expulsar intrusos antes de empezar y saltear jugadores ausentes durante la partida, conservando el orden original de las cadenas;
 - jugar rondas alternadas de texto y dibujo;
 - mostrar una de 100 frases visuales aleatorias como inspiración inicial;
 - dibujar con lápiz, goma, relleno, 12 colores, siete grosores y deshacer/rehacer;
@@ -120,6 +120,7 @@ Los clientes reciben `GAME_CHANGED` por un Broadcast privado `game:<uuid>`. El e
 - Las Server Actions verifican la sesión anónima y derivan el jugador desde `auth.users.id`.
 - Las salas nuevas usan seis caracteres generados con aleatoriedad criptográfica; los códigos históricos de cuatro caracteres siguen siendo legibles.
 - Los lobbies vencen a las dos horas, admiten hasta 12 jugadores y el anfitrión puede bloquearlos o quitar participantes.
+- Durante la partida, el anfitrión puede expulsar a un jugador que todavía debe responder en la ronda actual; sus aportes anteriores y su cadena se conservan, y el resto mantiene la rotación original.
 - La unión devuelve errores indistinguibles para salas inexistentes, vencidas, bloqueadas, llenas o ya iniciadas.
 - Los intentos de unión se limitan por sesión, código y HMAC de IP; el desafío Turnstile aparece únicamente ante comportamiento sospechoso.
 - El navegador no puede escribir tablas ni leer entregas ocultas.

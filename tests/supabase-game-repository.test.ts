@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { EntryContent, Game } from "@/domain/game";
+import {
+  removePlayerFromGame,
+  removePlayerFromLobby,
+  type EntryContent,
+  type Game,
+} from "@/domain/game";
 import {
   JoinChallengeRequiredError,
   PlayerNameTakenError,
 } from "@/repositories/game-repository";
 import {
+  deserializeGameSnapshot,
   SupabaseGameRepository,
   serializeEntries,
   type GameSnapshotGateway,
@@ -44,6 +50,7 @@ function snapshotFromGame(
       name: player.name,
       join_order: joinOrder,
       joined_at: player.joinedAt.toISOString(),
+      is_active: player.active,
     })),
     chains: game.chains.map((chain, position) => ({
       id: chain.id,
@@ -80,7 +87,7 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
       phase: "LOBBY",
       createdAt: now,
       hostPlayerId: playerId,
-      players: [{ id: playerId, name: playerName, joinedAt: now }],
+      players: [{ id: playerId, name: playerName, joinedAt: now, active: true }],
       chains: [],
       currentRound: null,
       rematchCode: null,
@@ -128,7 +135,8 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
     const existing = snapshot.players.find(
       (player) => player.auth_user_id === authUserId,
     );
-    if (existing) return "joined";
+    if (existing?.is_active) return "joined";
+    if (existing) return "unavailable";
     if (snapshot.game.phase !== "LOBBY") return "unavailable";
     if (
       snapshot.players.some(
@@ -151,6 +159,7 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
       name: player.name,
       join_order: snapshot.players.length,
       joined_at: player.joinedAt,
+      is_active: true,
     });
     snapshot.game.version += 1;
     return "joined";
@@ -169,7 +178,9 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
   async loadGameForUser(code: string, authUserId: string): Promise<unknown | null> {
     this.loadCalls += 1;
     const snapshot = this.snapshots.get(code);
-    if (!snapshot?.players.some((player) => player.auth_user_id === authUserId)) return null;
+    if (!snapshot?.players.some(
+      (player) => player.auth_user_id === authUserId && player.is_active,
+    )) return null;
     return structuredClone(snapshot);
   }
 
@@ -185,8 +196,16 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
     const snapshot = this.snapshots.get(code);
     const host = snapshot?.players.find((player) => player.id === snapshot.game.host_player_id);
     if (!snapshot || host?.auth_user_id !== authUserId) throw new Error("NOT_HOST");
-    snapshot.players = snapshot.players.filter((player) => player.id !== playerId);
-    snapshot.game.version += 1;
+    const loaded = deserializeGameSnapshot(snapshot);
+    const hostPlayerId = loaded.game.hostPlayerId;
+    if (!hostPlayerId) throw new Error("HOST_NOT_FOUND");
+    const updated = loaded.game.phase === "PLAYING"
+      ? removePlayerFromGame(loaded.game, hostPlayerId, playerId)
+      : removePlayerFromLobby(loaded.game, hostPlayerId, playerId);
+    this.snapshots.set(
+      code,
+      snapshotFromGame(updated, loaded.version + 1, this.identities),
+    );
   }
 
   async commitGame(input: PersistedGameCommit): Promise<boolean> {
@@ -304,6 +323,43 @@ describe("SupabaseGameRepository", () => {
         guest.player.id,
       ),
     ).resolves.toMatchObject({ players: [{ name: "Ana" }] });
+  });
+
+  it("persists in-game removal while preserving the original chain slots", async () => {
+    const gateway = new FakeSnapshotGateway();
+    const repository = new SupabaseGameRepository(gateway);
+    const host = await repository.createRoom("Ana", "auth-ana");
+    const absent = await repository.joinRoom(host.game.code, "Beto", "auth-beto");
+    const guest = await repository.joinRoom(host.game.code, "Cami", "auth-cami");
+    await repository.startGame(host.game.code, host.player.id, "auth-ana");
+    await repository.submitEntry(
+      host.game.code,
+      { playerId: host.player.id, roundNumber: 0, content: text(host.player.id, 0) },
+      "auth-ana",
+    );
+
+    const removed = await repository.removePlayer(
+      host.game.code,
+      host.player.id,
+      "auth-ana",
+      absent.player.id,
+    );
+    const reloaded = await new SupabaseGameRepository(gateway).getRoom(host.game.code);
+
+    expect(removed.players.find((player) => player.id === absent.player.id)?.active).toBe(false);
+    expect(reloaded?.players).toHaveLength(3);
+    expect(reloaded?.chains).toHaveLength(3);
+    expect(reloaded?.currentRound?.number).toBe(0);
+    await expect(
+      repository.getPlayerForUser(host.game.code, "auth-beto"),
+    ).resolves.toBeNull();
+
+    const advanced = await repository.submitEntry(
+      host.game.code,
+      { playerId: guest.player.id, roundNumber: 0, content: text(guest.player.id, 0) },
+      "auth-cami",
+    );
+    expect(advanced.currentRound?.number).toBe(1);
   });
 
   it("retries concurrent submissions and advances a round exactly once", async () => {

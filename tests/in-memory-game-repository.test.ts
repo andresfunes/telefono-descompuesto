@@ -126,6 +126,58 @@ describe("InMemoryGameRepository", () => {
     ).rejects.toBeInstanceOf(RoomNotFoundError);
   });
 
+  it("lets the host expel a pending player during play without losing their chain", async () => {
+    const host = await repository.createRoom("Host", "auth-host");
+    const absent = await repository.joinRoom(host.game.code, "Absent", "auth-absent");
+    const guest = await repository.joinRoom(host.game.code, "Guest", "auth-guest");
+    await repository.startGame(host.game.code, host.player.id, "auth-host");
+    await repository.submitEntry(
+      host.game.code,
+      {
+        playerId: host.player.id,
+        roundNumber: 0,
+        content: { type: "text", text: "Frase inicial" },
+      },
+      "auth-host",
+    );
+
+    const removed = await repository.removePlayer(
+      host.game.code,
+      host.player.id,
+      "auth-host",
+      absent.player.id,
+    );
+
+    expect(removed.players.find((player) => player.id === absent.player.id)?.active).toBe(false);
+    expect(removed.currentRound?.number).toBe(0);
+    await expect(
+      repository.getPlayerForUser(host.game.code, "auth-absent"),
+    ).resolves.toBeNull();
+    await expect(
+      repository.submitEntry(
+        host.game.code,
+        {
+          playerId: absent.player.id,
+          roundNumber: 0,
+          content: { type: "text", text: "No debería entrar" },
+        },
+        "auth-absent",
+      ),
+    ).rejects.toMatchObject({ code: "PLAYER_NOT_FOUND" });
+
+    const advanced = await repository.submitEntry(
+      host.game.code,
+      {
+        playerId: guest.player.id,
+        roundNumber: 0,
+        content: { type: "text", text: "Otra frase" },
+      },
+      "auth-guest",
+    );
+    expect(advanced.currentRound?.number).toBe(1);
+    expect(advanced.chains).toHaveLength(3);
+  });
+
   it("caps a lobby at twelve players", async () => {
     const host = await repository.createRoom("Host", "auth-host");
     for (let index = 1; index < MAXIMUM_PLAYER_COUNT; index += 1) {

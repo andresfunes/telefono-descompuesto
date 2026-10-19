@@ -3,6 +3,7 @@ import {
   generateRoomCode,
   normalizePlayerName,
   normalizeRoomCode,
+  removePlayerFromGame,
   startGame as startDomainGame,
   submitEntryAndAdvance,
   type Chain,
@@ -121,6 +122,12 @@ function integerField(row: Record<string, unknown>, key: string): number {
   return value;
 }
 
+function booleanField(row: Record<string, unknown>, key: string): boolean {
+  const value = row[key];
+  if (typeof value !== "boolean") throw new Error(`Snapshot inválido: ${key}.`);
+  return value;
+}
+
 function nullableIntegerField(row: Record<string, unknown>, key: string): number | null {
   return row[key] === null ? null : integerField(row, key);
 }
@@ -203,6 +210,7 @@ export function deserializeGameSnapshot(value: unknown): LoadedGame {
     id: stringField(row, "id"),
     name: stringField(row, "name"),
     joinedAt: dateField(row, "joined_at"),
+    active: booleanField(row, "is_active"),
   }));
   const playerIdByAuthUserId = new Map(
     playerRows.map((row) => [stringField(row, "auth_user_id"), stringField(row, "id")]),
@@ -324,6 +332,26 @@ function mapJoinResult(result: JoinGameGatewayResult): Error | null {
   return new RoomNotFoundError("No pudimos entrar a esa sala.");
 }
 
+function mapPlayerRemovalError(error: unknown): Error {
+  const message = hasMessage(error) ? error.message : "";
+  if (message.includes("PLAYER_ALREADY_SUBMITTED")) {
+    return new GameRuleError("PLAYER_ALREADY_SUBMITTED", "Ese jugador ya terminó su turno.");
+  }
+  if (message.includes("PLAYER_NOT_FOUND")) {
+    return new GameRuleError("PLAYER_NOT_FOUND", "El jugador no pertenece a la sala.");
+  }
+  if (message.includes("CANNOT_REMOVE_HOST")) {
+    return new GameRuleError("NOT_HOST", "El anfitrión no puede quitarse de la sala.");
+  }
+  if (message.includes("GAME_ALREADY_STARTED")) {
+    return new GameRuleError("GAME_ALREADY_STARTED", "La partida ya comenzó.");
+  }
+  if (message.includes("NOT_HOST")) {
+    return new GameRuleError("NOT_HOST", "Solo quien creó la sala puede quitar jugadores.");
+  }
+  return rpcFailure(error);
+}
+
 export class SupabaseGameRepository implements GameRepository {
   constructor(private readonly gateway: GameSnapshotGateway) {}
 
@@ -421,7 +449,9 @@ export class SupabaseGameRepository implements GameRepository {
     if (!loaded) return null;
 
     const playerId = loaded.playerIdByAuthUserId.get(authUserId);
-    const player = loaded.game.players.find((candidate) => candidate.id === playerId) ?? null;
+    const player = loaded.game.players.find(
+      (candidate) => candidate.id === playerId && candidate.active,
+    ) ?? null;
     return { game: loaded.game, player };
   }
 
@@ -432,7 +462,9 @@ export class SupabaseGameRepository implements GameRepository {
     );
     const loaded = snapshot ? deserializeGameSnapshot(snapshot) : null;
     const playerId = loaded?.playerIdByAuthUserId.get(authUserId);
-    return loaded?.game.players.find((player) => player.id === playerId) ?? null;
+    return loaded?.game.players.find(
+      (player) => player.id === playerId && player.active,
+    ) ?? null;
   }
 
   async joinRoom(
@@ -468,8 +500,11 @@ export class SupabaseGameRepository implements GameRepository {
 
     const loaded = await this.load(normalizedCode);
     const playerId = loaded?.playerIdByAuthUserId.get(authUserId);
-    const player = loaded?.game.players.find((candidate) => candidate.id === playerId);
-    if (!loaded || !player) throw new Error("No se pudo reconstruir la membresía.");
+    const player = loaded?.game.players.find(
+      (candidate) => candidate.id === playerId && candidate.active,
+    );
+    if (!loaded) throw new Error("No se pudo reconstruir la membresía.");
+    if (!player) throw new RoomNotFoundError("No pudimos entrar a esa sala.");
     return { game: loaded.game, player };
   }
 
@@ -507,10 +542,13 @@ export class SupabaseGameRepository implements GameRepository {
     if (loaded.playerIdByAuthUserId.get(authUserId) !== requestedByPlayerId) {
       throw new UnauthorizedGameActionError("No podés modificar a otro jugador.");
     }
+    if (loaded.game.phase === "PLAYING") {
+      removePlayerFromGame(loaded.game, requestedByPlayerId, playerId);
+    }
     try {
       await this.gateway.removePlayer(normalizedCode, authUserId, playerId);
     } catch (error) {
-      throw rpcFailure(error);
+      throw mapPlayerRemovalError(error);
     }
     const updated = await this.load(normalizedCode);
     if (!updated) throw new RoomNotFoundError("La sala no existe.");

@@ -13,8 +13,8 @@ import type {
 
 function completeGame(overrides: Partial<Game> = {}): Game {
   const players = [
-    { id: "p1", name: "Ana", joinedAt: new Date("2026-01-01T00:00:00Z") },
-    { id: "p2", name: "Beto", joinedAt: new Date("2026-01-01T00:00:01Z") },
+    { id: "p1", name: "Ana", joinedAt: new Date("2026-01-01T00:00:00Z"), active: true },
+    { id: "p2", name: "Beto", joinedAt: new Date("2026-01-01T00:00:01Z"), active: true },
   ];
   const entry = (chain: string, playerId: string, roundNumber: number) => ({
     id: `${chain}-${roundNumber}`,

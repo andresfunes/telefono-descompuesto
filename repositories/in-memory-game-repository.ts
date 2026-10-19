@@ -7,6 +7,7 @@ import {
   MAXIMUM_PLAYER_COUNT,
   normalizePlayerName,
   normalizeRoomCode,
+  removePlayerFromGame,
   removePlayerFromLobby,
   setLobbyLocked as setDomainLobbyLocked,
   startGame as startDomainGame,
@@ -38,6 +39,7 @@ export class InMemoryGameRepository implements GameRepository {
       id: crypto.randomUUID(),
       name: normalizePlayerName(playerName),
       joinedAt: new Date(),
+      active: true,
     };
     game.players.push(player);
     game.hostPlayerId = player.id;
@@ -102,7 +104,9 @@ export class InMemoryGameRepository implements GameRepository {
     const playerId = authUserId
       ? this.memberships.get(normalizedCode)?.get(authUserId)
       : undefined;
-    const player = game.players.find((candidate) => candidate.id === playerId) ?? null;
+    const player = game.players.find(
+      (candidate) => candidate.id === playerId && candidate.active,
+    ) ?? null;
     return structuredClone({ game, player });
   }
 
@@ -110,7 +114,9 @@ export class InMemoryGameRepository implements GameRepository {
     const normalizedCode = normalizeRoomCode(code);
     const game = this.rooms.get(normalizedCode);
     const playerId = this.memberships.get(normalizedCode)?.get(authUserId);
-    const player = game?.players.find((candidate) => candidate.id === playerId);
+    const player = game?.players.find(
+      (candidate) => candidate.id === playerId && candidate.active,
+    );
     return player ? structuredClone(player) : null;
   }
 
@@ -124,7 +130,9 @@ export class InMemoryGameRepository implements GameRepository {
     if (!game) throw new RoomNotFoundError("La sala no existe.");
 
     const existingPlayerId = this.memberships.get(normalizedCode)?.get(authUserId);
-    const existingPlayer = game.players.find((player) => player.id === existingPlayerId);
+    const existingPlayer = game.players.find(
+      (player) => player.id === existingPlayerId && player.active,
+    );
     if (existingPlayer) return structuredClone({ game, player: existingPlayer });
 
     if (game.phase !== "LOBBY") {
@@ -146,7 +154,12 @@ export class InMemoryGameRepository implements GameRepository {
     );
     if (isTaken) throw new PlayerNameTakenError("Ese nombre ya está en uso en la sala.");
 
-    const player: Player = { id: crypto.randomUUID(), name, joinedAt: new Date() };
+    const player: Player = {
+      id: crypto.randomUUID(),
+      name,
+      joinedAt: new Date(),
+      active: true,
+    };
     game.players.push(player);
     const memberships = this.memberships.get(normalizedCode) ?? new Map<string, string>();
     memberships.set(authUserId, player.id);
@@ -183,8 +196,11 @@ export class InMemoryGameRepository implements GameRepository {
     if (this.memberships.get(normalizedCode)?.get(authUserId) !== requestedByPlayerId) {
       throw new UnauthorizedGameActionError("No podés modificar a otro jugador.");
     }
-    const updated = removePlayerFromLobby(game, requestedByPlayerId, playerId);
+    const updated = game.phase === "PLAYING"
+      ? removePlayerFromGame(game, requestedByPlayerId, playerId)
+      : removePlayerFromLobby(game, requestedByPlayerId, playerId);
     this.rooms.set(normalizedCode, updated);
+    if (game.phase === "PLAYING") return structuredClone(updated);
     const memberships = this.memberships.get(normalizedCode);
     if (memberships) {
       for (const [userId, memberPlayerId] of memberships) {

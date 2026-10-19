@@ -11,6 +11,7 @@ export interface Player {
   id: string;
   name: string;
   joinedAt: Date;
+  active: boolean;
 }
 
 interface EntryBase {
@@ -101,6 +102,8 @@ export type GameRuleErrorCode =
   | "GAME_NOT_FINISHED"
   | "REMATCH_ALREADY_CREATED"
   | "PLAYER_NOT_FOUND"
+  | "PLAYER_ALREADY_INACTIVE"
+  | "PLAYER_ALREADY_SUBMITTED"
   | "WRONG_ROUND"
   | "WRONG_ENTRY_TYPE"
   | "DUPLICATE_SUBMISSION"
@@ -221,6 +224,40 @@ export function removePlayerFromLobby(
     throw new GameRuleError("PLAYER_NOT_FOUND", "El jugador no pertenece a la sala.");
   }
   return { ...game, players: game.players.filter((player) => player.id !== playerId) };
+}
+
+export function removePlayerFromGame(
+  game: Game,
+  requestedByPlayerId: string,
+  playerId: string,
+): Game {
+  if (game.phase !== "PLAYING" || !game.currentRound) {
+    throw new GameRuleError("GAME_NOT_PLAYING", "La partida no está en una ronda activa.");
+  }
+  if (game.hostPlayerId !== requestedByPlayerId) {
+    throw new GameRuleError("NOT_HOST", "Solo quien creó la sala puede expulsar jugadores.");
+  }
+  if (playerId === game.hostPlayerId) {
+    throw new GameRuleError("NOT_HOST", "El anfitrión no puede expulsarse de la partida.");
+  }
+  const target = game.players.find((player) => player.id === playerId);
+  if (!target) {
+    throw new GameRuleError("PLAYER_NOT_FOUND", "El jugador no pertenece a la sala.");
+  }
+  if (!target.active) {
+    throw new GameRuleError("PLAYER_ALREADY_INACTIVE", "Ese jugador ya fue expulsado.");
+  }
+  if (game.currentRound.submissions.some((submission) => submission.playerId === playerId)) {
+    throw new GameRuleError("PLAYER_ALREADY_SUBMITTED", "Ese jugador ya terminó su turno.");
+  }
+
+  const updated = {
+    ...game,
+    players: game.players.map((player) =>
+      player.id === playerId ? { ...player, active: false } : player,
+    ),
+  };
+  return isCurrentRoundComplete(updated) ? advanceRound(updated) : updated;
 }
 
 export function addRematch(
@@ -370,7 +407,7 @@ export function submitEntry(game: Game, command: SubmitEntryCommand): Game {
   if (game.phase !== "PLAYING" || !game.currentRound) {
     throw new GameRuleError("GAME_NOT_PLAYING", "La partida no está recibiendo respuestas.");
   }
-  if (!game.players.some((player) => player.id === command.playerId)) {
+  if (!game.players.some((player) => player.id === command.playerId && player.active)) {
     throw new GameRuleError("PLAYER_NOT_FOUND", "El jugador no pertenece a la sala.");
   }
   if (command.roundNumber !== game.currentRound.number) {
@@ -418,10 +455,13 @@ export function submitEntry(game: Game, command: SubmitEntryCommand): Game {
 }
 
 export function isCurrentRoundComplete(game: Game): boolean {
-  return Boolean(
-    game.currentRound &&
-      game.currentRound.submissions.length === game.players.length,
+  if (!game.currentRound) return false;
+  const submittedPlayerIds = new Set(
+    game.currentRound.submissions.map((submission) => submission.playerId),
   );
+  return game.players
+    .filter((player) => player.active)
+    .every((player) => submittedPlayerIds.has(player.id));
 }
 
 export function groupPlayersByRoundStatus(game: Game): RoundPlayerGroups {
@@ -432,9 +472,10 @@ export function groupPlayersByRoundStatus(game: Game): RoundPlayerGroups {
   const completedPlayerIds = new Set(
     game.currentRound.submissions.map((submission) => submission.playerId),
   );
+  const activePlayers = game.players.filter((player) => player.active);
   return {
-    pending: game.players.filter((player) => !completedPlayerIds.has(player.id)),
-    completed: game.players.filter((player) => completedPlayerIds.has(player.id)),
+    pending: activePlayers.filter((player) => !completedPlayerIds.has(player.id)),
+    completed: activePlayers.filter((player) => completedPlayerIds.has(player.id)),
   };
 }
 

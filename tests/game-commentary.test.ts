@@ -3,6 +3,7 @@ import {
   buildCommentaryInput,
   buildCommentaryTranscript,
   canGenerateGameCommentary,
+  commentaryEligibility,
   deserializeGameCommentaryItem,
   eligibleGameAwardCategories,
   GAME_COMMENTARY_INSTRUCTIONS,
@@ -25,8 +26,8 @@ function revealedGame(): Game {
     lobbyLocked: false,
     lobbyExpiresAt: new Date("2026-01-01T02:00:00Z"),
     players: [
-      { id: "p1", name: "Andrés", joinedAt: new Date("2026-01-01T00:00:00Z") },
-      { id: "p2", name: "Sofía", joinedAt: new Date("2026-01-01T00:00:01Z") },
+      { id: "p1", name: "Andrés", joinedAt: new Date("2026-01-01T00:00:00Z"), active: true },
+      { id: "p2", name: "Sofía", joinedAt: new Date("2026-01-01T00:00:01Z"), active: true },
     ],
     chains: [
       {
@@ -60,6 +61,15 @@ describe("game commentary context", () => {
   it("allows only the room creator to generate commentary", () => {
     expect(canGenerateGameCommentary(revealedGame(), "p1")).toBe(true);
     expect(canGenerateGameCommentary(revealedGame(), "p2")).toBe(false);
+  });
+
+  it("allows host commentary for a reveal with an expelled player's skipped turns", () => {
+    const game = revealedGame();
+    game.players[1]!.active = false;
+    game.chains[0]!.entries = game.chains[0]!.entries.slice(0, 1);
+    game.chains.push({ id: "chain-2", originPlayerId: "p2", entries: [] });
+
+    expect(commentaryEligibility(game, "p1")).toBeNull();
   });
 
   it("serializes real player names, authors and contributions", () => {
@@ -208,7 +218,7 @@ describe("game commentary context", () => {
       ...twoPlayerGame,
       players: [
         ...twoPlayerGame.players,
-        { id: "p3", name: "Mateo", joinedAt: new Date("2026-01-01T00:00:02Z") },
+        { id: "p3", name: "Mateo", joinedAt: new Date("2026-01-01T00:00:02Z"), active: true },
       ],
       chains: [{
         ...twoPlayerGame.chains[0],

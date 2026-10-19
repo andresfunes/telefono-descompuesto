@@ -99,18 +99,19 @@ export function commentaryEligibility(
   if (!game.players.some((player) => player.id === playerId)) return "NOT_MEMBER";
   if (!canGenerateGameCommentary(game, playerId)) return "NOT_HOST";
   if (game.phase !== "REVEAL") return "NOT_REVEAL";
+  const hasInactivePlayers = game.players.some((player) => !player.active);
   if (
     game.chains.length !== game.players.length ||
     game.chains.some(
       (chain) =>
-        chain.entries.length !== game.players.length ||
-        new Set(chain.entries.map((entry) => entry.roundNumber)).size !==
-          game.players.length ||
-        new Set(chain.entries.map((entry) => entry.playerId)).size !==
-          game.players.length ||
+        (!hasInactivePlayers && chain.entries.length !== game.players.length) ||
+        new Set(chain.entries.map((entry) => entry.roundNumber)).size !== chain.entries.length ||
+        new Set(chain.entries.map((entry) => entry.playerId)).size !== chain.entries.length ||
         chain.entries.some(
           (entry) =>
-            entry.roundNumber < 0 || entry.roundNumber >= game.players.length,
+            entry.roundNumber < 0 ||
+            entry.roundNumber >= game.players.length ||
+            !game.players.some((player) => player.id === entry.playerId),
         ),
     )
   ) {

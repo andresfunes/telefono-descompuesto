@@ -78,6 +78,14 @@ export function RevealScreen({
         <div className="text-5xl">🎉</div>
         <h2 className="mt-3 text-3xl font-black">¡Así quedó la historia!</h2>
         <p className="mt-2 text-slate-600">De la frase original al último disparate.</p>
+        {game.players.some((player) => !player.active) && (
+          <p className="mx-auto mt-3 max-w-lg rounded-xl bg-slate-100 p-3 text-sm text-slate-600">
+            Se saltearon los turnos de {game.players
+              .filter((player) => !player.active)
+              .map((player) => player.name)
+              .join(", ")}. Las cadenas mantienen su orden original.
+          </p>
+        )}
       </div>
 
       <GameCommentary

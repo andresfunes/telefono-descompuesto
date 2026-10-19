@@ -11,6 +11,7 @@ import {
   isLobbyExpired,
   isCurrentRoundComplete,
   MAXIMUM_PLAYER_COUNT,
+  removePlayerFromGame,
   removePlayerFromLobby,
   revealChains,
   startGame,
@@ -27,6 +28,7 @@ function players(count: number): Player[] {
     id: `p${index}`,
     name: `Player ${index}`,
     joinedAt: new Date(index),
+    active: true,
   }));
 }
 
@@ -133,6 +135,84 @@ describe("lobby moderation", () => {
     expect(moderated.players.map((player) => player.id)).toEqual(["p0", "p1"]);
     expect(() => removePlayerFromLobby(game, "p0", "p0")).toThrowError(
       expect.objectContaining({ code: "NOT_HOST" }),
+    );
+  });
+});
+
+describe("in-game moderation", () => {
+  it("expels a pending player and advances without changing chain rotation", () => {
+    let game = startGame(lobby(3), "p0");
+    game = submitEntry(game, {
+      playerId: "p0",
+      roundNumber: 0,
+      content: contentForRound(0, "p0"),
+    });
+    game = removePlayerFromGame(game, "p0", "p1");
+
+    expect(game.currentRound?.number).toBe(0);
+    expect(game.players.find((player) => player.id === "p1")?.active).toBe(false);
+    expect(groupPlayersByRoundStatus(game).pending.map((player) => player.id)).toEqual(["p2"]);
+    expect(() =>
+      submitEntry(game, {
+        playerId: "p1",
+        roundNumber: 0,
+        content: contentForRound(0, "p1"),
+      }),
+    ).toThrowError(expect.objectContaining({ code: "PLAYER_NOT_FOUND" }));
+
+    game = submitEntryAndAdvance(game, {
+      playerId: "p2",
+      roundNumber: 0,
+      content: contentForRound(0, "p2"),
+    });
+    expect(game.currentRound?.number).toBe(1);
+    expect(assignedChainForPlayer(game, "p2", 1).originPlayerId).toBe("p1");
+    expect(game.chains).toHaveLength(3);
+
+    for (let roundNumber = 1; roundNumber < 3; roundNumber += 1) {
+      for (const playerId of ["p0", "p2"]) {
+        game = submitEntryAndAdvance(game, {
+          playerId,
+          roundNumber,
+          content: contentForRound(roundNumber, playerId),
+        });
+      }
+    }
+    expect(game.phase).toBe("REVEAL");
+    expect(game.currentRound).toBeNull();
+    expect(game.chains).toHaveLength(3);
+  });
+
+  it("advances immediately when the absent player was the last pending player", () => {
+    let game = startGame(lobby(2), "p0");
+    game = submitEntry(game, {
+      playerId: "p0",
+      roundNumber: 0,
+      content: contentForRound(0, "p0"),
+    });
+
+    game = removePlayerFromGame(game, "p0", "p1");
+
+    expect(game.currentRound?.number).toBe(1);
+    expect(game.currentRound?.submissions).toEqual([]);
+  });
+
+  it("allows only the host to expel an active, pending non-host player", () => {
+    const game = startGame(lobby(3), "p0");
+    expect(() => removePlayerFromGame(game, "p1", "p2")).toThrowError(
+      expect.objectContaining({ code: "NOT_HOST" }),
+    );
+    expect(() => removePlayerFromGame(game, "p0", "p0")).toThrowError(
+      expect.objectContaining({ code: "NOT_HOST" }),
+    );
+
+    const submitted = submitEntry(game, {
+      playerId: "p2",
+      roundNumber: 0,
+      content: contentForRound(0, "p2"),
+    });
+    expect(() => removePlayerFromGame(submitted, "p0", "p2")).toThrowError(
+      expect.objectContaining({ code: "PLAYER_ALREADY_SUBMITTED" }),
     );
   });
 });

@@ -117,26 +117,53 @@ export function RemovePlayerForm({
   roomCode,
   playerId,
   playerName,
+  inGame = false,
 }: {
   roomCode: string;
   playerId: string;
   playerName: string;
+  inGame?: boolean;
 }) {
   const [state, action] = useActionState(removeRoomPlayer, initialState);
   return (
-    <form action={action} className="ml-auto">
+    <form
+      action={action}
+      className="ml-auto"
+      onSubmit={(event) => {
+        if (inGame && !window.confirm(`¿Expulsar a ${playerName} y saltear su turno?`)) {
+          event.preventDefault();
+        }
+      }}
+    >
       <input name="roomCode" type="hidden" value={roomCode} />
       <input name="playerId" type="hidden" value={playerId} />
-      <button
-        aria-label={`Quitar a ${playerName}`}
-        className="rounded-lg px-2 py-1 text-xs font-black text-red-700 transition hover:bg-red-100 disabled:opacity-60"
-        title={`Quitar a ${playerName}`}
-        type="submit"
-      >
-        Quitar
-      </button>
-      {state.error && <span className="sr-only" role="alert">{state.error}</span>}
+      <RemovePlayerButton inGame={inGame} playerName={playerName} />
+      {state.error && (
+        <p className="text-xs font-semibold text-red-700" role="alert">{state.error}</p>
+      )}
     </form>
+  );
+}
+
+function RemovePlayerButton({
+  inGame,
+  playerName,
+}: {
+  inGame: boolean;
+  playerName: string;
+}) {
+  const { pending } = useFormStatus();
+  const actionLabel = inGame ? "Expulsar y saltear" : "Quitar";
+  return (
+    <button
+      aria-label={`${inGame ? "Expulsar y saltear a" : "Quitar a"} ${playerName}`}
+      className="whitespace-nowrap rounded-lg px-2 py-1 text-xs font-black text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+      disabled={pending}
+      title={`${inGame ? "Expulsar y saltear a" : "Quitar a"} ${playerName}`}
+      type="submit"
+    >
+      {pending ? "Procesando…" : actionLabel}
+    </button>
   );
 }
 

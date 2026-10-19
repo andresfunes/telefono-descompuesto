@@ -4,7 +4,7 @@ import {
   type Game,
   type Player,
 } from "@/domain/game";
-import { TurnForm } from "./game-controls";
+import { RemovePlayerForm, TurnForm } from "./game-controls";
 import { randomExamplePrompt } from "@/lib/example-prompts";
 
 export function PlayingScreen({
@@ -29,8 +29,11 @@ export function PlayingScreen({
   const hasSubmitted = round.submissions.some(
     (submission) => submission.playerId === currentPlayer.id,
   );
-  const completedCount = round.submissions.length;
   const playerGroups = groupPlayersByRoundStatus(game);
+  const isHost = game.hostPlayerId === currentPlayer.id;
+  const completedCount = playerGroups.completed.length;
+  const activePlayerCount = playerGroups.completed.length + playerGroups.pending.length;
+  const inactivePlayers = game.players.filter((player) => !player.active);
   const pendingActivity =
     round.expectedEntryType === "drawing" ? "Dibujando" : "Escribiendo";
   const pendingCountLabel = playerGroups.pending.length === 1
@@ -49,16 +52,51 @@ export function PlayingScreen({
           </h2>
         </div>
         <span className="rounded-full bg-[var(--mint)] px-4 py-2 text-sm font-bold">
-          {completedCount} / {game.players.length}
+          {completedCount} / {activePlayerCount}
         </span>
       </div>
+
+      {isHost && playerGroups.pending.some((player) => player.id !== game.hostPlayerId) && (
+        <section className="mb-4 rounded-2xl border-2 border-[var(--coral)] bg-[var(--cream)] p-4">
+          <h3 className="font-black text-[var(--coral)]">¿Alguien quedó ausente?</h3>
+          <ul className="mt-3 space-y-2">
+            {playerGroups.pending
+              .filter((player) => player.id !== game.hostPlayerId)
+              .map((player) => (
+                <li
+                  className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 font-black"
+                  key={player.id}
+                >
+                  {player.name}
+                  <RemovePlayerForm
+                    inGame
+                    playerId={player.id}
+                    playerName={player.name}
+                    roomCode={game.code}
+                  />
+                </li>
+              ))}
+          </ul>
+          <p className="mt-3 text-xs text-slate-600">
+            Al expulsarlo se saltea su turno. Su cadena se conserva y los demás siguen
+            con la rotación original.
+          </p>
+        </section>
+      )}
+
+      {inactivePlayers.length > 0 && (
+        <p className="mb-4 rounded-xl bg-slate-100 p-3 text-sm text-slate-600">
+          Fuera de la partida: {inactivePlayers.map((player) => player.name).join(", ")}.
+          Sus turnos se saltean sin reasignar las cadenas.
+        </p>
+      )}
 
       {hasSubmitted ? (
         <div className="rounded-[1.5rem] bg-[var(--cream)] p-6 text-center">
           <div className="text-4xl">⏳</div>
           <h3 className="mt-3 text-2xl font-black">Esperando al resto…</h3>
           <p className="mt-2 text-slate-600">
-            {completedCount} / {game.players.length} jugadores terminaron
+            {completedCount} / {activePlayerCount} jugadores terminaron
           </p>
           <div className="mt-6 grid gap-4 text-left sm:grid-cols-2">
             <section className="rounded-2xl border-2 border-[var(--coral)] bg-white p-4 shadow-[4px_4px_0_var(--coral)]">
@@ -68,7 +106,7 @@ export function PlayingScreen({
                   {pendingCountLabel}
                 </span>
               </div>
-              {playerGroups.pending.length > 0 ? (
+              {playerGroups.pending.length > 0 && !isHost ? (
                 <ul className="mt-3 space-y-2">
                   {playerGroups.pending.map((player) => (
                     <li
@@ -83,6 +121,10 @@ export function PlayingScreen({
                     </li>
                   ))}
                 </ul>
+              ) : playerGroups.pending.length > 0 ? (
+                <p className="mt-3 text-sm font-semibold">
+                  Revisá los jugadores pendientes para saltear a alguien ausente.
+                </p>
               ) : (
                 <p className="mt-3 text-sm font-semibold">Todos terminaron. Avanzando…</p>
               )}

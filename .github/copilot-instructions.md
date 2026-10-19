@@ -1,5 +1,13 @@
 # Copilot instructions for Teléfono Descompuesto
 
+## Repository-specific guidance for Copilot
+
+- Treat `app/` as the authoritative boundary for authentication, mutations, validation, revalidation, Turnstile checks, and admin analytics auth; client code should only trigger server actions or refresh after authoritative state changes.
+- Keep `domain/` pure and rule-driven (`domain/game.ts` is the source of truth for transitions and validation). Do not duplicate lobby or round rules in UI components or repository adapters.
+- Preserve the repository boundary: the in-memory repository remains usable for tests, and `SupabaseGameRepository` must keep reconstructing the authoritative aggregate and comparing versions via the existing retry flow.
+- For changes touching database schema, RLS, realtime authorization, abuse protection, or AI output validation, run `pnpm supabase:test` in addition to the normal TypeScript/Vitest checks.
+- Single-test workflow: `pnpm exec vitest run tests/<file>.test.ts` and `pnpm exec vitest run tests/<file>.test.ts -t "<test name>"`.
+
 ## Project overview
 
 This is a mobile-first multiplayer party game built as a Next.js 16 App Router
