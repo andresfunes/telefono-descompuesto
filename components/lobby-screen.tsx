@@ -1,11 +1,12 @@
 import {
   isLobbyExpired,
+  totalGameRounds,
   MAXIMUM_PLAYER_COUNT,
   MINIMUM_PLAYER_COUNT,
   type Game,
   type Player,
 } from "@/domain/game";
-import { LobbyLockForm, RemovePlayerForm, StartGameForm } from "./game-controls";
+import { LobbyLockForm, RemovePlayerForm, RoundLimitForm, StartGameForm } from "./game-controls";
 import { RoomInvitation } from "./room-invitation";
 
 export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer: Player }) {
@@ -44,6 +45,18 @@ export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer
           ))}
         </ul>
       </div>
+
+      <section className="mb-6 rounded-2xl bg-[var(--cream)] p-4" aria-label="Duración">
+        {isHost && !lobbyExpired ? (
+          <RoundLimitForm roomCode={game.code} roundLimit={game.roundLimit ?? null} />
+        ) : (
+          <p className="font-black">Duración: {game.roundLimit ? `Rápida · ${game.roundLimit} rondas` : "Partida completa"}</p>
+        )}
+        <p className="mt-3 text-sm text-slate-600">
+          {hasMinimumPlayers ? `Con este grupo: ${totalGameRounds(game)} rondas, alternando texto y dibujo.` : "El total se ajustará cuando se sumen los jugadores."}
+          {" "}Las partidas rápidas duran como máximo una ronda por jugador.
+        </p>
+      </section>
 
       {lobbyExpired ? (
         <div className="rounded-2xl bg-red-50 p-4 text-center text-red-800">

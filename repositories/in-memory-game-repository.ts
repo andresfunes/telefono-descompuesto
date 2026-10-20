@@ -1,6 +1,8 @@
 import { setRevealStep as updateRevealStep } from "@/domain/reveal";
 import {
   addRematch,
+  setRoundLimit as setDomainRoundLimit,
+  type RoundLimit,
   createLobbyGame,
   GameRuleError,
   generateRoomCode,
@@ -82,6 +84,8 @@ export class InMemoryGameRepository implements GameRepository {
     if (!host) throw new GameRuleError("PLAYER_NOT_FOUND", "El jugador no pertenece a la sala.");
 
     const created = await this.createRoom(host.name, authUserId);
+    created.game.roundLimit = sourceGame.roundLimit ?? null;
+    this.rooms.set(created.game.code, structuredClone(created.game));
     this.rooms.set(
       normalizedCode,
       addRematch(sourceGame, requestedByPlayerId, created.game.code),
@@ -213,6 +217,18 @@ export class InMemoryGameRepository implements GameRepository {
         }
       }
     }
+    return structuredClone(updated);
+  }
+
+  async setRoundLimit(code: string, requestedByPlayerId: string, authUserId: string, roundLimit: RoundLimit): Promise<Game> {
+    const normalizedCode = normalizeRoomCode(code);
+    const game = this.rooms.get(normalizedCode);
+    if (!game) throw new RoomNotFoundError("La sala no existe.");
+    if (this.memberships.get(normalizedCode)?.get(authUserId) !== requestedByPlayerId) {
+      throw new UnauthorizedGameActionError("No podés modificar a otro jugador.");
+    }
+    const updated = setDomainRoundLimit(game, requestedByPlayerId, roundLimit);
+    this.rooms.set(normalizedCode, updated);
     return structuredClone(updated);
   }
 

@@ -442,3 +442,27 @@ export async function changeRevealStep(_previousState: FormState, formData: Form
   revalidatePath(`/${code}`);
   return {};
 }
+
+
+export async function setRoomRoundLimit(_previousState: FormState, formData: FormData): Promise<FormState> {
+  const code = normalizeRoomCode(String(formData.get("roomCode") ?? ""));
+  const value = formData.get("roundLimit");
+  if (!isValidRoomCode(code) || (value !== "full" && value !== "4" && value !== "6")) {
+    return { error: "La duración elegida no es válida." };
+  }
+  const roundLimit = value === "full" ? null : value === "4" ? 4 : 6;
+  const authUserId = await getAuthenticatedUserId();
+  if (!authUserId) return { error: "Tu sesión venció. Volvé a entrar a la sala." };
+  const player = await gameRepository.getPlayerForUser(code, authUserId);
+  if (!player) return { error: "No pertenecés a esta sala." };
+  try {
+    await gameRepository.setRoundLimit(code, player.id, authUserId, roundLimit);
+  } catch (error) {
+    revalidatePath(`/${code}`);
+    const message = expectedErrorMessage(error);
+    if (message) return { error: message };
+    throw error;
+  }
+  revalidatePath(`/${code}`);
+  return {};
+}

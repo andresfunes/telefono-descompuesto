@@ -3,6 +3,8 @@ import { setRevealStep } from "@/domain/reveal";
 import { describe, expect, it } from "vitest";
 import {
   removePlayerFromGame,
+  setRoundLimit,
+  type RoundLimit,
   removePlayerFromLobby,
   type EntryContent,
   type Game,
@@ -44,6 +46,7 @@ function snapshotFromGame(
       created_at: game.createdAt.toISOString(),
       rematch_code: game.rematchCode,
       reveal_step: game.revealStep ?? null,
+      round_limit: game.roundLimit ?? null,
       lobby_locked: game.lobbyLocked,
       lobby_expires_at: game.lobbyExpiresAt.toISOString(),
     },
@@ -116,6 +119,7 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
     if (source.game.rematch_code) return source.game.rematch_code;
 
     await this.createGameWithHost(newCode, authUserId, host.name);
+    this.snapshots.get(newCode)!.game.round_limit = source.game.round_limit;
     source.game.rematch_code = newCode;
     source.game.version += 1;
     return newCode;
@@ -209,6 +213,15 @@ class FakeSnapshotGateway implements GameSnapshotGateway {
       code,
       snapshotFromGame(updated, loaded.version + 1, this.identities),
     );
+  }
+
+  async setRoundLimit(code: string, authUserId: string, roundLimit: RoundLimit): Promise<void> {
+    const snapshot = this.snapshots.get(code);
+    const host = snapshot?.players.find((p) => p.id === snapshot.game.host_player_id);
+    if (!snapshot || host?.auth_user_id !== authUserId) throw new Error("NOT_HOST");
+    const loaded = deserializeGameSnapshot(snapshot);
+    const updated = setRoundLimit(loaded.game, host.id, roundLimit);
+    this.snapshots.set(code, snapshotFromGame(updated, loaded.version + 1, this.identities));
   }
 
   async setRevealStep(code: string, authUserId: string, expectedStep: number | null, step: number): Promise<boolean> {
@@ -525,5 +538,38 @@ describe.each(["memory", "supabase"])("%s synchronized reveal", (adapter) => {
     expect((await repository.getRoomSession(game.code, "guest-user"))?.game.revealStep).toBe(0);
     await repository.setRevealStep(game.code, host.id, "host-user", 0, 4);
     expect((await repository.getRoom(game.code))?.revealStep).toBe(4);
+  });
+});
+
+
+describe.each(["memory", "supabase"])("%s game duration", (adapter) => {
+  it("saves the host selection, finishes early, and preserves the limit in a rematch", async () => {
+    const repository = adapter === "memory" ? new InMemoryGameRepository() :
+      new SupabaseGameRepository(new FakeSnapshotGateway());
+    const { game, player: host } = await repository.createRoom("Host", "host-user");
+    const participants = [{ player: host, user: "host-user" }];
+    for (let i = 1; i < 8; i += 1) {
+      const { player } = await repository.joinRoom(game.code, `Guest ${i}`, `user-${i}`);
+      participants.push({ player, user: `user-${i}` });
+    }
+    await expect(repository.setRoundLimit(game.code, participants[1].player.id, "user-1", 4)).rejects.toThrow();
+    await expect(repository.setRoundLimit(game.code, host.id, "user-1", 4)).rejects.toThrow();
+    await repository.setRoundLimit(game.code, host.id, "host-user", 4);
+    expect((await repository.getRoomSession(game.code, "user-1"))?.game.roundLimit).toBe(4);
+    await repository.startGame(game.code, host.id, "host-user");
+    await expect(repository.setRoundLimit(game.code, host.id, "host-user", 6)).rejects.toThrow();
+    for (let round = 0; round < 4; round += 1) {
+      for (const { player, user } of participants) {
+        await repository.submitEntry(game.code, { playerId: player.id, roundNumber: round,
+          content: round % 2 === 0 ? { type: "text", text: "Una jirafa" } :
+            { type: "drawing", asset: { kind: "storage-path", value: `games/test/${player.id}-${round}.png`, mimeType: "image/png" } },
+        }, user);
+      }
+    }
+    const finished = await repository.getRoom(game.code);
+    expect(finished?.phase).toBe("REVEAL");
+    expect(finished?.chains.every((chain) => chain.entries.length === 4)).toBe(true);
+    const rematch = await repository.createRematch(game.code, host.id, "host-user");
+    expect(rematch.game.roundLimit).toBe(4);
   });
 });

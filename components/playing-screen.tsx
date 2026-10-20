@@ -1,5 +1,6 @@
 import {
   groupPlayersByRoundStatus,
+  totalGameRounds,
   previousEntryForPlayer,
   type Game,
   type Player,
@@ -45,7 +46,7 @@ export function PlayingScreen({
       <div className="mb-6 flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-widest text-slate-500">
-            Ronda {round.number + 1} de {game.players.length}
+            Ronda {round.number + 1} de {totalGameRounds(game)}
           </p>
           <h2 className="mt-1 text-2xl font-black">
             {round.expectedEntryType === "text" ? "Turno de texto" : "Turno de dibujo"}

@@ -1,6 +1,10 @@
+import { commentaryEligibility } from "@/domain/game-commentary";
 import { describe, expect, it } from "vitest";
 import {
   addRematch,
+  setRoundLimit,
+  totalGameRounds,
+  type RoundLimit,
   advanceRound,
   assignedChainForPlayer,
   createLobbyGame,
@@ -390,5 +394,57 @@ describe("rematches", () => {
     expect(() => addRematch(revealed, "p0", "JKLM")).toThrowError(
       expect.objectContaining({ code: "REMATCH_ALREADY_CREATED" }),
     );
+  });
+});
+
+
+describe("configurable game duration", () => {
+  it.each([
+    [12, null, 12], [8, 4, 4], [12, 6, 6], [3, 6, 3], [2, 4, 2], [4, 4, 4],
+  ] as [number, RoundLimit, number][])("%i players with limit %s play %i rounds", (count, limit, rounds) => {
+    let game = startGame(setRoundLimit(lobby(count), "p0", limit), "p0");
+    expect(totalGameRounds(game)).toBe(rounds);
+    for (let round = 0; round < rounds; round += 1) {
+      expect(game.phase).toBe("PLAYING");
+      for (const player of game.players) {
+        game = submitEntryAndAdvance(game, {
+          playerId: player.id, roundNumber: round, content: contentForRound(round, player.id),
+        });
+      }
+    }
+    expect(game.phase).toBe("REVEAL");
+    expect(game.revealStep).toBe(-1);
+    expect(game.chains).toHaveLength(count);
+    for (const chain of game.chains) {
+      expect(chain.entries).toHaveLength(rounds);
+      expect(new Set(chain.entries.map((entry) => entry.playerId)).size).toBe(rounds);
+    }
+    expect(commentaryEligibility(game, "p0")).toBeNull();
+    const incomplete = structuredClone(game);
+    incomplete.chains[0].entries.pop();
+    expect(commentaryEligibility(incomplete, "p0")).toBe("INCOMPLETE_GAME");
+  });
+
+  it("enforces host, lobby, expiration and permitted limits", () => {
+    expect(() => setRoundLimit(lobby(8), "p1", 4)).toThrow();
+    expect(() => setRoundLimit(startGame(lobby(8), "p0"), "p0", 4)).toThrow();
+    expect(() => setRoundLimit({ ...lobby(8), lobbyExpiresAt: new Date(0) }, "p0", 4)).toThrow();
+    expect(() => setRoundLimit(lobby(8), "p0", 5 as RoundLimit)).toThrow();
+    expect(setRoundLimit(setRoundLimit(lobby(8), "p0", 4), "p0", null).roundLimit).toBeNull();
+    expect(totalGameRounds(lobby(8))).toBe(8);
+  });
+
+  it("finishes at the selected limit when the host removes the final pending player", () => {
+    let game = startGame(setRoundLimit(lobby(8), "p0", 4), "p0");
+    for (let round = 0; round < 4; round += 1) {
+      for (const player of game.players.filter((p) => round < 3 || p.id !== "p7")) {
+        game = submitEntryAndAdvance(game, { playerId: player.id, roundNumber: round,
+          content: contentForRound(round, player.id) });
+      }
+    }
+    expect(game.phase).toBe("PLAYING");
+    game = removePlayerFromGame(game, "p0", "p7");
+    expect(game.phase).toBe("REVEAL");
+    expect(totalGameRounds(game)).toBe(4);
   });
 });

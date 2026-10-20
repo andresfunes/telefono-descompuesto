@@ -15,12 +15,13 @@ import { useFormStatus } from "react-dom";
 import {
   removeRoomPlayer,
   setRoomLock,
+  setRoomRoundLimit,
   startRoomGame,
   submitTurn,
   type FormState,
 } from "@/app/actions";
-import type { PlayableEntryType } from "@/domain/game";
-import { GAME_ACTION_PENDING_EVENT } from "@/lib/game-client-events";
+import type { PlayableEntryType, RoundLimit } from "@/domain/game";
+import { GAME_ACTION_PENDING_EVENT, ROUND_LIMIT_PENDING_EVENT } from "@/lib/game-client-events";
 import {
   readTurnDraft,
   removeTurnDraft,
@@ -83,12 +84,20 @@ export function StartGameForm({
   hasMinimumPlayers: boolean;
 }) {
   const [state, action] = useActionState(startRoomGame, initialState);
+  const [savingDuration, setSavingDuration] = useState(false);
+  useEffect(() => {
+    const onDurationPending = (event: Event) => {
+      if (event instanceof CustomEvent) setSavingDuration(event.detail.pending === true);
+    };
+    window.addEventListener(ROUND_LIMIT_PENDING_EVENT, onDurationPending);
+    return () => window.removeEventListener(ROUND_LIMIT_PENDING_EVENT, onDurationPending);
+  }, []);
   return (
     <form action={action} className="space-y-3">
       <input name="roomCode" type="hidden" value={roomCode} />
       {state.error && <p className="text-center text-sm font-semibold text-red-700">{state.error}</p>}
       <ActionButton
-        disabled={!hasMinimumPlayers}
+        disabled={!hasMinimumPlayers || savingDuration}
         idleLabel="Comenzar partida"
         pendingLabel="Comenzando…"
       />
@@ -288,6 +297,50 @@ export function TurnForm({
         idleLabel={entryType === "drawing" ? "Terminé mi dibujo" : "Enviar"}
         pendingLabel="Enviando…"
       />
+    </form>
+  );
+}
+
+
+export function RoundLimitForm({ roomCode, roundLimit }: { roomCode: string; roundLimit: RoundLimit }) {
+  const [state, action, pending] = useActionState(setRoomRoundLimit, initialState);
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(ROUND_LIMIT_PENDING_EVENT, { detail: { pending } }));
+    window.dispatchEvent(new CustomEvent(GAME_ACTION_PENDING_EVENT, { detail: { pending } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent(ROUND_LIMIT_PENDING_EVENT, { detail: { pending: false } }));
+      window.dispatchEvent(new CustomEvent(GAME_ACTION_PENDING_EVENT, { detail: { pending: false } }));
+    };
+  }, [pending]);
+  return (
+    <form action={action} className="space-y-3">
+      <input type="hidden" name="roomCode" value={roomCode} />
+      <fieldset disabled={pending}>
+        <legend className="mb-3 font-black">Duración de la partida</legend>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {([
+            { value: "full", label: "Partida completa", detail: "Una ronda por jugador", limit: null },
+            { value: "4", label: "Rápida · 4 rondas", detail: "2 de texto + 2 de dibujo", limit: 4 },
+            { value: "6", label: "Rápida · 6 rondas", detail: "3 de texto + 3 de dibujo", limit: 6 },
+          ] as const).map((option) => (
+            <button
+              key={option.value}
+              type="submit"
+              name="roundLimit"
+              value={option.value}
+              aria-pressed={roundLimit === option.limit}
+              className={`min-h-16 rounded-2xl border-2 p-3 text-left disabled:opacity-60 ${roundLimit === option.limit ? "border-[var(--ink)] bg-[var(--mint)]" : "border-slate-200 bg-white"}`}
+            >
+              <span className="block text-sm font-black">{option.label}</span>
+              <span className="mt-1 block text-xs text-slate-600">{option.detail}</span>
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <p aria-live="polite" className="text-sm text-slate-600">
+        {pending ? "Guardando duración…" : "La opción marcada está guardada para todos."}
+      </p>
+      {state.error && <p role="alert" className="text-sm font-semibold text-red-700">{state.error}</p>}
     </form>
   );
 }

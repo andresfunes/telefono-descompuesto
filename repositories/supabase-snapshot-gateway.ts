@@ -1,4 +1,5 @@
 import "server-only";
+import type { RoundLimit } from "@/domain/game";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -102,6 +103,13 @@ export class SupabaseSnapshotGateway implements GameSnapshotGateway {
       p_player_id: playerId,
     });
     if (error) throw error;
+  }
+
+  async setRoundLimit(code: string, authUserId: string, roundLimit: RoundLimit): Promise<void> {
+    const { error } = await createAdminClient().rpc("set_game_round_limit", {
+      p_code: code, p_auth_user_id: authUserId, p_round_limit: roundLimit,
+    });
+    if (error) throw rpcFailure(error);
   }
 
   async setRevealStep(code: string, authUserId: string, expectedStep: number | null, step: number): Promise<boolean> {

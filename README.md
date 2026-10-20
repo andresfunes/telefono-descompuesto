@@ -132,6 +132,23 @@ Los clientes reciben `GAME_CHANGED` por un Broadcast privado `game:<uuid>`. El e
 - Los comentarios requieren Turnstile y una reserva atómica por `game_id`; los límites y el cupo diario viven en tablas privadas de PostgreSQL.
 - Vercel provee la IP mediante `x-vercel-forwarded-for`; fuera de Vercel en producción se usa un bucket conservador sin confiar en headers arbitrarios.
 
+### Duración de la partida
+
+El anfitrión elige en el lobby entre **Partida completa**, **Rápida · 4 rondas** y
+**Rápida · 6 rondas**. La selección se guarda al tocar la opción y se sincroniza para
+todos. La completa dura una ronda por jugador; las rápidas duran `min(límite, N)`
+rondas para no repetir autores en una misma cadena. Con ocho jugadores, la rápida
+de cuatro rondas tiene dos turnos de texto y dos de dibujo por persona.
+
+Al empezar, la duración ya no puede modificarse. Expulsar a alguien durante la
+partida conserva el total previsto y la rotación. La revelación y la IA utilizan
+las entregas de las rondas jugadas; las revanchas heredan la opción, que puede
+cambiarse en su nuevo lobby.
+
+Aplicar `20261020120000_configurable_game_duration.sql` antes de desplegar esta
+versión. No requiere variables nuevas. Las salas existentes mantienen el modo
+completo por defecto.
+
 ### Presentación sincronizada
 
 Las nuevas partidas llegan a una pantalla de espera al terminar. El anfitrión controla
@@ -188,7 +205,7 @@ El dashboard interno está en `/admin/analytics`. Configurá `ADMIN_ANALYTICS_SE
 
 ### Rotación de cadenas
 
-En la ronda `r`, el jugador `i` recibe la cadena `(i - r) mod N`. Con `N` jugadores se juegan `N` rondas: cada participante contribuye exactamente una vez a cada cadena.
+En la ronda `r`, el jugador `i` recibe la cadena `(i - r) mod N`. Con `N` jugadores, la partida completa juega `N` rondas: cada participante contribuye exactamente una vez a cada cadena. En una partida rápida se juegan `min(límite, N)` rondas y cada participante visita esa cantidad de cadenas distintas.
 
 ## Proyecto Supabase alojado
 

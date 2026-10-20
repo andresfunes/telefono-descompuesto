@@ -4,6 +4,8 @@ export const MAXIMUM_PLAYER_COUNT = 12;
 export const LOBBY_DURATION_MS = 2 * 60 * 60 * 1_000;
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
+export type RoundLimit = 4 | 6 | null;
+
 export type GamePhase = "LOBBY" | "PLAYING" | "REVEAL" | "FINISHED";
 export type PlayableEntryType = "text" | "drawing";
 
@@ -83,6 +85,8 @@ export interface Game {
   rematchCode: string | null;
   /** null/undefined keeps legacy games in the complete summary. */
   revealStep?: number | null;
+  /** null/undefined means one round per player (complete game). */
+  roundLimit?: RoundLimit;
   lobbyLocked: boolean;
   lobbyExpiresAt: Date;
 }
@@ -485,7 +489,7 @@ export function arePlayableRoundsComplete(game: Game): boolean {
   return Boolean(
     game.currentRound &&
       isCurrentRoundComplete(game) &&
-      game.currentRound.number + 1 >= game.players.length,
+      game.currentRound.number + 1 >= totalGameRounds(game),
   );
 }
 
@@ -526,4 +530,23 @@ export function revealChains(game: Game): Chain[] {
       (left, right) => left.roundNumber - right.roundNumber,
     ),
   }));
+}
+
+
+export function totalGameRounds(game: Game): number {
+  return Math.min(game.players.length, game.roundLimit ?? game.players.length);
+}
+
+export function setRoundLimit(game: Game, requestedByPlayerId: string, roundLimit: RoundLimit, now = new Date()): Game {
+  if (game.phase !== "LOBBY") {
+    throw new GameRuleError("GAME_ALREADY_STARTED", "La duración no se puede cambiar durante la partida.");
+  }
+  if (game.hostPlayerId !== requestedByPlayerId || !game.players.some((player) => player.id === requestedByPlayerId && player.active)) {
+    throw new GameRuleError("NOT_HOST", "Solo el anfitrión puede elegir la duración.");
+  }
+  if (isLobbyExpired(game, now)) throw new GameRuleError("LOBBY_EXPIRED", "La sala venció.");
+  if (roundLimit !== null && roundLimit !== 4 && roundLimit !== 6) {
+    throw new GameRuleError("INVALID_ENTRY", "La duración elegida no es válida.");
+  }
+  return { ...game, roundLimit };
 }

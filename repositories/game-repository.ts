@@ -1,4 +1,4 @@
-import type { Game, Player, SubmitEntryCommand } from "@/domain/game";
+import type { Game, Player, RoundLimit, SubmitEntryCommand } from "@/domain/game";
 
 export interface RoomSession {
   game: Game;
@@ -41,6 +41,7 @@ export interface GameRepository {
     authUserId: string,
     playerId: string,
   ): Promise<Game>;
+  setRoundLimit(code: string, requestedByPlayerId: string, authUserId: string, roundLimit: RoundLimit): Promise<Game>;
   setRevealStep(
     code: string,
     requestedByPlayerId: string,

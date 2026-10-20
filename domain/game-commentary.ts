@@ -1,4 +1,4 @@
-import { revealChains, type Game } from "./game";
+import { revealChains, totalGameRounds, type Game } from "./game";
 
 export type HumorIntensity = "GENTLE" | "STANDARD" | "STRONG";
 
@@ -104,13 +104,13 @@ export function commentaryEligibility(
     game.chains.length !== game.players.length ||
     game.chains.some(
       (chain) =>
-        (!hasInactivePlayers && chain.entries.length !== game.players.length) ||
+        (!hasInactivePlayers && chain.entries.length !== totalGameRounds(game)) ||
         new Set(chain.entries.map((entry) => entry.roundNumber)).size !== chain.entries.length ||
         new Set(chain.entries.map((entry) => entry.playerId)).size !== chain.entries.length ||
         chain.entries.some(
           (entry) =>
             entry.roundNumber < 0 ||
-            entry.roundNumber >= game.players.length ||
+            entry.roundNumber >= totalGameRounds(game) ||
             !game.players.some((player) => player.id === entry.playerId),
         ),
     )
