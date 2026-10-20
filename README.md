@@ -12,6 +12,7 @@ El flujo clásico permite:
 - jugar rondas alternadas de texto y dibujo;
 - mostrar una de 100 frases visuales aleatorias como inspiración inicial;
 - dibujar con lápiz, goma, relleno, 12 colores, siete grosores y deshacer/rehacer;
+- ampliar el lienzo 2× y desplazar la vista para dibujar detalles en celulares;
 - usar controles de dibujo grandes y táctiles, ver el tamaño del lápiz o borrador
   sobre el lienzo y dibujar puntos sin arrastrar;
 - sincronizar lobby, jugadores pendientes, rondas y reveal automáticamente;
@@ -20,6 +21,12 @@ El flujo clásico permite:
 - generar comentarios personalizados por cadena y premios de la partida;
 - crear una revancha y notificar al resto mediante un modal descartable;
 - registrar páginas vistas y visitas agregadas con Vercel Web Analytics.
+
+La lupa alterna entre vista completa y zoom 2×. Con el zoom activo, las cuatro
+flechas permiten mover el lienzo sin dibujar; el icono de encuadre vuelve a mostrarlo
+completo. Elegir lápiz, borrador o relleno sale del modo de desplazamiento. La vista
+se mantiene dentro de los bordes y conserva su zona al cambiar el ancho de pantalla.
+El zoom no modifica los trazos, el historial ni la resolución del PNG enviado (960×720).
 
 Los dibujos se editan como vectores con `react-konva`, se exportan a PNG y se guardan en un bucket privado. PostgreSQL conserva el estado autoritativo.
 Cada elemento vectorial o rasterizado recibe un identificador único; al recuperar un
@@ -38,11 +45,22 @@ duplicados, omitidos o inestables durante el render.
 
 ## Requisitos
 
-- Node.js 22 o superior (ejecutá `nvm use` para usar la versión del proyecto)
-- pnpm 11.19 o compatible
-- Docker Desktop, OrbStack u otro runtime compatible para Supabase local
+- Node.js 22 (con fnm: `fnm install 22 && fnm use 22`)
+- pnpm 11.19.0, la versión fijada en `package.json`
+- Colima con Docker CLI, Docker Desktop u otro runtime compatible para Supabase local
 
 ## Desarrollo local
+
+En macOS con Homebrew podés instalar e iniciar Colima:
+
+```bash
+brew install colima docker
+colima start --cpu 4 --memory 6 --disk 60
+```
+
+Después de reiniciar la Mac, ejecutá `colima start` antes de iniciar Supabase.
+Si pnpm indica que su directorio global no está en el PATH, ejecutá `pnpm setup`
+y abrí una terminal nueva; no hace falta actualizar pnpm para iniciar el proyecto.
 
 ```bash
 pnpm install

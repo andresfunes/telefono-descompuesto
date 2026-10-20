@@ -58,9 +58,9 @@ export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer
         )}
         <p className="mt-3 text-sm text-slate-600">
           {hasMinimumPlayers ? `Con este grupo: ${totalGameRounds(game)} rondas, alternando texto y dibujo.` : "El total se ajustará cuando se sumen los jugadores."}
-          {!canShortenGame && " Podrás elegir una partida rápida desde 5 jugadores."}
+          {hasMinimumPlayers && !effectiveRoundLimit && " Todos participan en cada cadena."}
         </p>
-        {game.roundLimit && effectiveRoundLimit === null && (
+        {canShortenGame && game.roundLimit && effectiveRoundLimit === null && (
           <p className="mt-2 text-xs text-slate-500">
             Preferencia para grupos más grandes: rápida de {game.roundLimit} rondas.
           </p>

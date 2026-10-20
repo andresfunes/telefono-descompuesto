@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { hapticFeedback } from "@/lib/haptic-feedback";
 import type { DrawingTool } from "./drawing-state";
 
 interface DrawingColor {
@@ -36,8 +37,10 @@ export const BRUSH_SIZES = [...PRIMARY_BRUSH_SIZES, ...EXTRA_BRUSH_SIZES];
 
 interface DrawingToolbarProps {
   tool: DrawingTool;
+  drawingPaused?: boolean;
   color: string;
   brushSize: number;
+  canvasScale?: number;
   canUndo: boolean;
   canRedo: boolean;
   canClear: boolean;
@@ -187,8 +190,10 @@ function brushSizePreviewDiameter(size: number, maximum = 40): number {
 
 export function DrawingToolbar({
   tool,
+  drawingPaused = false,
   color,
   brushSize,
+  canvasScale = 1,
   canUndo,
   canRedo,
   canClear,
@@ -203,14 +208,22 @@ export function DrawingToolbar({
   const extraBrushSizesRef = useRef<HTMLDetailsElement>(null);
   const selectedExtraColor = EXTRA_DRAWING_COLORS.find((option) => option.value === color);
   const selectedExtraBrushSize = EXTRA_BRUSH_SIZES.find((size) => size === brushSize);
+  const previewDiameter = brushSize * canvasScale;
+
+  const withFeedback = (action: () => void) => {
+    hapticFeedback();
+    action();
+  };
 
   const selectColor = (value: string, closeExtraColors = false) => {
+    hapticFeedback();
     onColorChange(value);
     if (tool === "eraser") onToolChange("pen");
     if (closeExtraColors) extraColorsRef.current?.removeAttribute("open");
   };
 
   const selectBrushSize = (size: number, closeExtraSizes = false) => {
+    hapticFeedback();
     onBrushSizeChange(size);
     if (closeExtraSizes) extraBrushSizesRef.current?.removeAttribute("open");
   };
@@ -220,9 +233,9 @@ export function DrawingToolbar({
       <div className="flex flex-wrap gap-2">
         <button
           aria-label="Lápiz"
-          aria-pressed={tool === "pen"}
+          aria-pressed={!drawingPaused && tool === "pen"}
           className={toolButtonClass}
-          onClick={() => onToolChange("pen")}
+          onClick={() => withFeedback(() => onToolChange("pen"))}
           title="Lápiz"
           type="button"
         >
@@ -230,9 +243,9 @@ export function DrawingToolbar({
         </button>
         <button
           aria-label="Borrador"
-          aria-pressed={tool === "eraser"}
+          aria-pressed={!drawingPaused && tool === "eraser"}
           className={toolButtonClass}
-          onClick={() => onToolChange("eraser")}
+          onClick={() => withFeedback(() => onToolChange("eraser"))}
           title="Borrador"
           type="button"
         >
@@ -240,25 +253,25 @@ export function DrawingToolbar({
         </button>
         <button
           aria-label="Rellenar"
-          aria-pressed={tool === "fill"}
+          aria-pressed={!drawingPaused && tool === "fill"}
           className={toolButtonClass}
-          onClick={() => onToolChange("fill")}
+          onClick={() => withFeedback(() => onToolChange("fill"))}
           title="Rellenar"
           type="button"
         >
           <PaintBucketIcon />
         </button>
-        <button aria-label="Deshacer" className={toolButtonClass} disabled={!canUndo} onClick={onUndo} title="Deshacer" type="button">
+        <button aria-label="Deshacer" className={toolButtonClass} disabled={!canUndo} onClick={() => withFeedback(onUndo)} title="Deshacer" type="button">
           <UndoIcon />
         </button>
-        <button aria-label="Rehacer" className={toolButtonClass} disabled={!canRedo} onClick={onRedo} title="Rehacer" type="button">
+        <button aria-label="Rehacer" className={toolButtonClass} disabled={!canRedo} onClick={() => withFeedback(onRedo)} title="Rehacer" type="button">
           <RedoIcon />
         </button>
         <button
           aria-label="Limpiar dibujo"
           className={toolButtonClass}
           disabled={!canClear}
-          onClick={onClear}
+          onClick={() => withFeedback(onClear)}
           title="Limpiar dibujo"
           type="button"
         >
@@ -391,6 +404,24 @@ export function DrawingToolbar({
           </details>
         </fieldset>
       </div>
+      {!drawingPaused && tool !== "fill" && (
+        <div className="flex items-center gap-3 rounded-xl bg-[var(--cream)] px-3 py-2">
+          <div
+            aria-hidden="true"
+            className="grid shrink-0 place-items-center rounded-lg border border-slate-200 bg-white"
+            style={{ width: Math.max(48, previewDiameter + 8), height: Math.max(48, previewDiameter + 8) }}
+          >
+            <span
+              className={`block rounded-full ${tool === "eraser" ? "outline outline-1 outline-dashed outline-slate-500" : ""}`}
+              style={{ width: previewDiameter, height: previewDiameter, backgroundColor: tool === "eraser" ? "#ffffff" : color }}
+            />
+          </div>
+          <p className="text-xs text-slate-600">
+            {tool === "eraser" ? "Tamaño del borrador" : "Grosor del trazo"}
+            <span className="block">Así se verá en el lienzo.</span>
+          </p>
+        </div>
+      )}
     </div>
   );
 }

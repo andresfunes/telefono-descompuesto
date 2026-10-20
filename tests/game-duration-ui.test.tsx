@@ -49,7 +49,9 @@ describe("duration options for small groups", () => {
       expect(html).not.toContain('name="roundLimit"');
       expect(html).toContain("Duración: Partida completa");
       expect(html).toContain(`Con este grupo: ${count} rondas`);
-      expect(html).toContain("desde 5 jugadores");
+      expect(html).toContain("Todos participan en cada cadena.");
+      expect(html).not.toContain("desde 5 jugadores");
+      expect(html).not.toContain("Preferencia para grupos más grandes");
     }
     expect(game.roundLimit).toBe(4);
   });

@@ -11,6 +11,8 @@ import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { Circle, Image as KonvaImage, Layer, Line, Rect, Stage } from "react-konva";
 import { DrawingToolbar } from "./drawing-toolbar";
+import { hapticFeedback } from "@/lib/haptic-feedback";
+import { DrawingViewControls } from "./drawing-view-controls";
 import { floodFillPngDataUrl } from "./flood-fill";
 import {
   addStroke,
@@ -33,8 +35,16 @@ import {
 import { exportStageToPng } from "./export-drawing";
 import { readTurnDraft, writeTurnDraft } from "@/lib/turn-draft";
 
-export const LOGICAL_CANVAS_WIDTH = 960;
-export const LOGICAL_CANVAS_HEIGHT = 720;
+import {
+  FIT_DRAWING_VIEW,
+  LOGICAL_CANVAS_WIDTH,
+  LOGICAL_CANVAS_HEIGHT,
+  panDrawingView,
+  zoomDrawingView,
+  type DrawingViewport,
+} from "./drawing-viewport";
+
+export { LOGICAL_CANVAS_WIDTH, LOGICAL_CANVAS_HEIGHT } from "./drawing-viewport";
 
 export interface DrawingCanvasHandle {
   exportPng: () => string | null;
@@ -55,6 +65,10 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
   const stageRef = useRef<Konva.Stage>(null);
   const cursorRef = useRef<Konva.Circle>(null);
   const activePointerRef = useRef<number | null>(null);
+  const capturedPointerRef = useRef<HTMLElement | null>(null);
+  const panPointRef = useRef<DrawingPoint | null>(null);
+  const [view, setView] = useState<DrawingViewport>(FIT_DRAWING_VIEW);
+  const [movingCanvas, setMovingCanvas] = useState(false);
   const fillPendingRef = useRef(false);
   const draftRef = useRef<DrawingStroke | null>(null);
   const historyRef = useRef<DrawingHistory>(EMPTY_DRAWING_HISTORY);
@@ -78,7 +92,14 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
 
   const finishStroke = (): DrawingHistory => {
     const currentDraft = draftRef.current;
+    const pointerId = activePointerRef.current;
+    const captured = capturedPointerRef.current;
     activePointerRef.current = null;
+    capturedPointerRef.current = null;
+    panPointRef.current = null;
+    if (pointerId !== null && captured?.hasPointerCapture(pointerId)) {
+      captured.releasePointerCapture(pointerId);
+    }
     draftRef.current = null;
     setDraft(null);
     if (!currentDraft) return historyRef.current;
@@ -136,14 +157,17 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
       const cursor = cursorRef.current;
       cursor?.hide();
       cursor?.getLayer()?.draw();
-      const png = exportStageToPng(stageRef.current, {
-        width: LOGICAL_CANVAS_WIDTH,
-        height: LOGICAL_CANVAS_HEIGHT,
-      });
-      cursor?.show();
-      cursor?.getLayer()?.draw();
-      finishStroke();
-      return png;
+      try {
+        const png = exportStageToPng(stageRef.current, {
+          width: LOGICAL_CANVAS_WIDTH,
+          height: LOGICAL_CANVAS_HEIGHT,
+        });
+        finishStroke();
+        return png;
+      } finally {
+        cursor?.show();
+        cursor?.getLayer()?.draw();
+      }
     },
   }));
 
@@ -156,6 +180,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
   const fillRegion = async (point: DrawingPoint) => {
     const stage = stageRef.current;
     if (!stage || fillPendingRef.current) return;
+    hapticFeedback();
     fillPendingRef.current = true;
     try {
       const source = exportStageToPng(stage, {
@@ -176,9 +201,23 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
     }
   };
 
+  const capturePointer = (event: PointerEvent) => {
+    if (event.target instanceof HTMLElement) {
+      event.target.setPointerCapture(event.pointerId);
+      capturedPointerRef.current = event.target;
+    }
+  };
+
   const handlePointerDown = (event: KonvaEventObject<PointerEvent>) => {
-    if (!event.evt.isPrimary || activePointerRef.current !== null) return;
+    if (!event.evt.isPrimary || event.evt.button !== 0 || activePointerRef.current !== null || fillPendingRef.current) return;
     event.evt.preventDefault();
+    if (movingCanvas) {
+      activePointerRef.current = event.evt.pointerId;
+      panPointRef.current = { x: event.evt.clientX, y: event.evt.clientY };
+      capturePointer(event.evt);
+      setCursorPoint(null);
+      return;
+    }
     const point = pointerPosition(event);
     if (!point) return;
     setCursorPoint(point);
@@ -189,6 +228,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
     }
 
     activePointerRef.current = event.evt.pointerId;
+    capturePointer(event.evt);
     const nextDraft = createStroke(
       `stroke-${crypto.randomUUID()}`,
       tool,
@@ -201,6 +241,16 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
   };
 
   const handlePointerMove = (event: KonvaEventObject<PointerEvent>) => {
+    if (movingCanvas) {
+      const previous = panPointRef.current;
+      if (activePointerRef.current !== event.evt.pointerId || !previous) return;
+      event.evt.preventDefault();
+      const next = { x: event.evt.clientX, y: event.evt.clientY };
+      setView((current) => panDrawingView(current, { x: next.x - previous.x, y: next.y - previous.y }, containerWidth));
+      panPointRef.current = next;
+      return;
+    }
+    if (!event.evt.isPrimary) return;
     const point = pointerPosition(event);
     if (!point) return;
     setCursorPoint(point);
@@ -220,7 +270,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
 
   const handlePointerLeave = (event: KonvaEventObject<PointerEvent>) => {
     setCursorPoint(null);
-    handlePointerEnd(event);
+    if (!movingCanvas || !capturedPointerRef.current) handlePointerEnd(event);
   };
 
   const handlePointerCancel = (event: KonvaEventObject<PointerEvent>) => {
@@ -228,7 +278,22 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
     handlePointerEnd(event);
   };
 
-  const scale = containerWidth / LOGICAL_CANVAS_WIDTH;
+  const changeView = (nextView: DrawingViewport) => {
+    finishStroke();
+    setCursorPoint(null);
+    setView(nextView);
+    if (nextView.zoom === 1) setMovingCanvas(false);
+  };
+
+  const selectTool = (nextTool: DrawingTool) => {
+    finishStroke();
+    setCursorPoint(null);
+    setMovingCanvas(false);
+    setTool(nextTool);
+  };
+
+  const baseScale = containerWidth / LOGICAL_CANVAS_WIDTH;
+  const scale = baseScale * view.zoom;
   const visibleStrokes = draft ? [...history.strokes, draft] : history.strokes;
   const lastRasterIndex = visibleStrokes.findLastIndex((element) => element.tool === "raster");
   const visibleElements = lastRasterIndex >= 0
@@ -238,7 +303,9 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
   return (
     <div className="space-y-4">
       <DrawingToolbar
+        drawingPaused={movingCanvas}
         brushSize={brushSize}
+        canvasScale={scale}
         canClear={!isDrawingEmpty(history.strokes)}
         canRedo={history.future.length > 0}
         canUndo={history.past.length > 0}
@@ -247,27 +314,53 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
         onClear={() => replaceHistory(clearDrawing(finishStroke()))}
         onColorChange={setColor}
         onRedo={() => replaceHistory(redoDrawing(finishStroke()))}
-        onToolChange={setTool}
+        onToolChange={selectTool}
         onUndo={() => replaceHistory(undoDrawing(finishStroke()))}
         tool={tool}
       />
 
+      <DrawingViewControls
+        zoomed={view.zoom === 2}
+        moving={movingCanvas}
+        onZoom={() => changeView(view.zoom === 1 ? zoomDrawingView() : FIT_DRAWING_VIEW)}
+        onMove={() => {
+          finishStroke();
+          setCursorPoint(null);
+          setMovingCanvas(!movingCanvas);
+        }}
+        onFit={() => changeView(FIT_DRAWING_VIEW)}
+      />
+      <p className="text-sm text-slate-600" aria-live="polite">
+        {movingCanvas ? "Arrastrá para recorrer el lienzo. Elegí el lápiz, borrador o relleno para seguir dibujando." :
+          view.zoom === 2 ? "Zoom 2×: dibujá los detalles o tocá las cuatro flechas para cambiar de zona." :
+            "Tocá la lupa para ampliar y dibujar detalles."}
+      </p>
+
       <div
         aria-label="Lienzo de dibujo"
         className={`w-full overflow-hidden rounded-2xl border-2 border-[var(--ink)] bg-white shadow-inner ${
-          tool === "fill" ? "cursor-crosshair" : "cursor-none"
+          movingCanvas ? "cursor-grab active:cursor-grabbing" : tool === "fill" ? "cursor-crosshair" : "cursor-none"
         }`}
         data-testid="drawing-canvas"
         ref={containerRef}
+        onLostPointerCapture={(event) => {
+          if (activePointerRef.current === event.pointerId) finishStroke();
+        }}
+        onPointerCancel={(event) => {
+          if (activePointerRef.current === event.pointerId) {
+            setCursorPoint(null);
+            finishStroke();
+          }
+        }}
         role="application"
         style={{ aspectRatio: `${LOGICAL_CANVAS_WIDTH} / ${LOGICAL_CANVAS_HEIGHT}`, touchAction: "none" }}
       >
         {containerWidth > 0 && (
           <Stage
-            height={LOGICAL_CANVAS_HEIGHT * scale}
+            height={LOGICAL_CANVAS_HEIGHT * baseScale}
             onPointerCancel={handlePointerCancel}
             onPointerDown={handlePointerDown}
-            onPointerEnter={(event) => setCursorPoint(pointerPosition(event))}
+            onPointerEnter={(event) => !movingCanvas && setCursorPoint(pointerPosition(event))}
             onPointerLeave={handlePointerLeave}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerEnd}
@@ -275,6 +368,8 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
             scaleX={scale}
             scaleY={scale}
             width={containerWidth}
+            x={view.offset.x * scale}
+            y={view.offset.y * scale}
           >
             <Layer listening={false}>
               <Rect fill="#ffffff" height={LOGICAL_CANVAS_HEIGHT} width={LOGICAL_CANVAS_WIDTH} />
@@ -318,7 +413,7 @@ const DrawingCanvas = forwardRef<DrawingCanvasHandle, { storageKey: string }>(fu
               ))}
             </Layer>
             <Layer listening={false}>
-              {cursorPoint && tool !== "fill" && (
+              {cursorPoint && !movingCanvas && tool !== "fill" && (
                 <Circle
                   dash={tool === "eraser" ? [6 / scale, 4 / scale] : undefined}
                   fill={tool === "eraser" ? "#ffffff" : color}
