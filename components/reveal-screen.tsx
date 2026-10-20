@@ -79,9 +79,16 @@ export function RevealScreen({
   const isHost = game.hostPlayerId === currentPlayerId;
   const hostName = playerNames.get(game.hostPlayerId ?? "") ?? "El anfitrión";
 
+  const earlyEndNotice = game.players.filter((player) => player.active).length < 2 ? (
+    <p className="mb-4 rounded-xl bg-[var(--cream)] p-3 text-center text-sm text-slate-600">
+      La partida terminó porque quedó un solo jugador activo. Podés ver los aportes que llegaron a enviarse.
+    </p>
+  ) : null;
+
   if (!summary) {
     return (
       <section className="py-6" aria-label="Presentación sincronizada">
+        {earlyEndNotice}
         <div className="mb-5 text-center">
           <p className="text-sm font-black uppercase tracking-widest text-slate-500">Revelación en vivo</p>
           <h2 className="mt-2 text-2xl font-black">Una carta, una sorpresa</h2>
@@ -102,8 +109,8 @@ export function RevealScreen({
           ) : (
             <div className="rounded-3xl border-2 border-dashed border-slate-300 bg-[var(--cream)] p-8 text-center">
               <span className="text-5xl" aria-hidden="true">🎬</span>
-              <h3 className="mt-4 text-xl font-black">¡Que empiece la revelación!</h3>
-              <p className="mt-2 text-slate-600">{isHost ? "Cuando estén todos listos, revelá la primera carta." : `Esperando a que ${hostName} revele la primera carta…`}</p>
+              <h3 className="mt-4 text-xl font-black">{slides.length === 0 ? "No llegaron a enviarse aportes" : "¡Que empiece la revelación!"}</h3>
+              <p className="mt-2 text-slate-600">{slides.length === 0 ? "Podés ir al resumen para crear una nueva partida." : isHost ? "Cuando estén todos listos, revelá la primera carta." : `Esperando a que ${hostName} revele la primera carta…`}</p>
             </div>
           )}
           <p className="mt-4 text-center text-sm text-slate-500">Carta {Math.max(0, (game.revealStep ?? -1) + 1)} de {slides.length}</p>
@@ -116,6 +123,7 @@ export function RevealScreen({
 
   return (
     <div className="py-6">
+      {earlyEndNotice}
       <div className="mb-8 text-center">
         <div className="text-5xl">🎉</div>
         <h2 className="mt-3 text-3xl font-black">¡Así quedó la historia!</h2>

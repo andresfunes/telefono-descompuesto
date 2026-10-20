@@ -33,7 +33,7 @@ export function RevealControls({ roomCode, step, total }: {
               ← Anterior
             </button>
             <button className={`${buttonClass} bg-[var(--ink)] text-white`} disabled={pending} name="step" value={step + 1}>
-              {step < 0 ? "Revelar primera carta" : step + 1 === total ? "Ver resumen y premios" : "Siguiente carta →"}
+              {total === 0 ? "Ver resumen" : step < 0 ? "Revelar primera carta" : step + 1 === total ? "Ver resumen y premios" : "Siguiente carta →"}
             </button>
             {step + 1 < total && (
               <button className={`${buttonClass} bg-white`} disabled={pending} name="step" value={total}>

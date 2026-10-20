@@ -263,6 +263,9 @@ export function removePlayerFromGame(
       player.id === playerId ? { ...player, active: false } : player,
     ),
   };
+  if (updated.players.filter((player) => player.active).length < MINIMUM_PLAYER_COUNT) {
+    return { ...updated, phase: "REVEAL", currentRound: null, revealStep: -1 };
+  }
   return isCurrentRoundComplete(updated) ? advanceRound(updated) : updated;
 }
 

@@ -144,6 +144,14 @@ describe("lobby moderation", () => {
 });
 
 describe("in-game moderation", () => {
+  it("ends even if the remaining host has not submitted", () => {
+    const game = startGame(lobby(2), "p0");
+    const result = removePlayerFromGame(game, "p0", "p1");
+    expect(result.phase).toBe("REVEAL");
+    expect(result.currentRound).toBeNull();
+    expect(result.chains).toEqual(game.chains);
+  });
+
   it("expels a pending player and advances without changing chain rotation", () => {
     let game = startGame(lobby(3), "p0");
     game = submitEntry(game, {
@@ -187,7 +195,7 @@ describe("in-game moderation", () => {
     expect(game.chains).toHaveLength(3);
   });
 
-  it("advances immediately when the absent player was the last pending player", () => {
+  it("ends immediately when the host is the only remaining active player", () => {
     let game = startGame(lobby(2), "p0");
     game = submitEntry(game, {
       playerId: "p0",
@@ -197,8 +205,9 @@ describe("in-game moderation", () => {
 
     game = removePlayerFromGame(game, "p0", "p1");
 
-    expect(game.currentRound?.number).toBe(1);
-    expect(game.currentRound?.submissions).toEqual([]);
+    expect(game.phase).toBe("REVEAL");
+    expect(game.currentRound).toBeNull();
+    expect(game.revealStep).toBe(-1);
   });
 
   it("allows only the host to expel an active, pending non-host player", () => {

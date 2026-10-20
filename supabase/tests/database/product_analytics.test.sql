@@ -3,6 +3,10 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(31);
 
+-- Isolate aggregate assertions from existing local development games.
+-- The transaction rollback restores these rows after the test.
+delete from private.product_events;
+
 select has_table(
   'private',
   'product_events',

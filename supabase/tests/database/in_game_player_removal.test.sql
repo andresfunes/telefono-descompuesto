@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(5);
+select plan(10);
 
 insert into auth.users (id, email, raw_user_meta_data)
 values
@@ -35,6 +35,8 @@ from public.games game
 join public.players host
   on host.game_id = game.id and host.id = game.host_player_id
 where game.code = 'AFK223';
+
+savepoint before_host_submission;
 
 insert into public.chain_entries (
   id,
@@ -81,9 +83,9 @@ select results_eq(
 );
 
 select results_eq(
-  $$select current_round from public.games where code = 'AFK223'$$,
-  array[1],
-  'the round advances when all remaining players have submitted'
+  $$select phase::text from public.games where code = 'AFK223'$$,
+  array['REVEAL'::text],
+  'the game ends when only one active player remains'
 );
 
 select results_eq(
@@ -112,5 +114,36 @@ select ok(
   'an expelled player loses access to realtime updates'
 );
 
+rollback to savepoint before_host_submission;
+
+select lives_ok(
+  $$select public.remove_game_player('AFK223',
+    '61000000-0000-0000-0000-000000000001',
+    (select id from public.players
+      where game_id = (select id from public.games where code = 'AFK223')
+      and auth_user_id = '61000000-0000-0000-0000-000000000002'))$$,
+  'the host can remove the last opponent before submitting'
+);
+select results_eq(
+  $$select phase::text from public.games where code = 'AFK223'$$,
+  array['REVEAL'::text], 'a pending host does not keep playing alone'
+);
+select ok(
+  (select current_round is null and current_entry_type is null and reveal_step = -1
+   from public.games where code = 'AFK223'),
+  'early completion clears the round and initializes synchronized reveal'
+);
+select is(
+  (select count(*)::integer from public.chains where game_id =
+    (select id from public.games where code = 'AFK223')),
+  1, 'early completion preserves existing chains'
+);
+
+select results_eq(
+  $$select round_count::integer from private.product_events
+    where game_id = (select id from public.games where code = 'AFK223')
+      and event_name = 'game_finished'$$,
+  array[0], 'finishing before any submissions records zero rounds'
+);
 select * from finish();
 rollback;
