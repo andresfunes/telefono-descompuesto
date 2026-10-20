@@ -10,7 +10,7 @@ El flujo clásico permite:
 - invitar mediante QR, WhatsApp o un enlace copiable;
 - bloquear el lobby, expulsar intrusos antes de empezar y saltear jugadores ausentes durante la partida, conservando el orden original de las cadenas;
 - jugar rondas alternadas de texto y dibujo;
-- mostrar una de 100 frases visuales aleatorias como inspiración inicial;
+- sugerir ideas entre 100 frases visuales en la ronda inicial, sin sobrescribir el borrador;
 - dibujar con lápiz, goma, relleno, 12 colores, siete grosores y deshacer/rehacer;
 - ampliar el lienzo 2× y desplazar la vista para dibujar detalles en celulares;
 - usar controles de dibujo grandes y táctiles, ver el tamaño del lápiz o borrador
@@ -139,7 +139,7 @@ Los clientes reciben `GAME_CHANGED` por un Broadcast privado `game:<uuid>`. El e
 - Las Server Actions verifican la sesión anónima y derivan el jugador desde `auth.users.id`.
 - Las salas nuevas usan seis caracteres generados con aleatoriedad criptográfica; los códigos históricos de cuatro caracteres siguen siendo legibles.
 - Los lobbies vencen a las dos horas, admiten hasta 12 jugadores y el anfitrión puede bloquearlos o quitar participantes.
-- Durante la partida, el anfitrión puede expulsar a un jugador que todavía debe responder en la ronda actual; sus aportes anteriores y su cadena se conservan, y el resto mantiene la rotación original.
+- Durante la partida, el anfitrión puede expulsar a un jugador que todavía debe responder en la ronda actual; sus aportes anteriores y su cadena se conservan, y el resto mantiene la rotación original. Si queda un solo jugador activo, el servidor termina la partida y permite revelar los aportes existentes, incluso si todavía no se envió ninguno.
 - La unión devuelve errores indistinguibles para salas inexistentes, vencidas, bloqueadas, llenas o ya iniciadas.
 - Los intentos de unión se limitan por sesión, código y HMAC de IP; el desafío Turnstile aparece únicamente ante comportamiento sospechoso.
 - El navegador no puede escribir tablas ni leer entregas ocultas.

@@ -1,6 +1,6 @@
 # Backlog
 
-- [ ] Al expulsar a un jugador en una partida iniciada, verificar que no haya quedado un solo jugador y decidir que hacer en ese caso, si aún no se hizo nada, lo mas lógico seria dar por finalizada la partida.
+- [x] **Finalización con un jugador:** al expulsar al último oponente, el servidor pasa a revelación conservando las cadenas, incluso sin envíos. Incluye analytics de cero rondas y pruebas de dominio y PostgreSQL.
 - [x] **Previsualización de grosor táctil:** muestra del tamaño del trazo o
   borrador antes de dibujar, ajustada al color y zoom actuales sin depender de
   `hover` ni predecir la posición del dedo.
@@ -8,13 +8,10 @@
   `navigator.vibrate?.(10)` al tocar herramientas, deshacer o rellenar con balde
   para dar una sensación táctil de aplicación nativa en navegadores compatibles.
   Implementado y validado con tests; pendiente de probar la vibración en un celular real.
-- [ ] **Inspiración de consignas (ruleta / temas):** aprovechar las frases de
-  `lib/example-prompts.ts` para agregar un botón «🎲 Sugerir idea» o un selector
-  de temas (Cine, Animales bizarros, Situaciones cotidianas) que ayude con el
-  bloqueo creativo en la ronda 0.
-- [ ] **Optimización de refresco Realtime:** en `components/game-realtime.tsx`,
-  cada evento `GAME_CHANGED` dispara un `router.refresh()`. Si varios jugadores
-  envían casi al mismo tiempo, se pueden producir muchos refrescos SSR
-  concurrentes. Evaluar un payload ligero en el broadcast para actualizar en el
-  cliente estados menores, como el contador de jugadores que terminaron la ronda,
-  sin revalidar todo el árbol de Server Components.
+- [x] **Inspiración de consignas:** botón «🎲 Sugerir idea» en la ronda 0,
+  con las 100 frases existentes, sin repetir la sugerencia actual ni sobrescribir
+  el borrador del jugador.
+- [x] **Optimización de refresco Realtime:** agrupa ráfagas durante 250 ms,
+  evita refrescos simultáneos y conserva una actualización pendiente durante
+  refrescos o acciones. Se mantiene el snapshot autoritativo del servidor;
+  no se introducen contadores derivados del broadcast en el cliente.
