@@ -1,18 +1,23 @@
 "use client";
 
-import { startTransition, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { GAME_ACTION_PENDING_EVENT } from "@/lib/game-client-events";
 import { createClient } from "@/lib/supabase/client";
+
+import { createRealtimeRefreshQueue } from "@/lib/realtime-refresh-queue";
 
 type ConnectionState = "connecting" | "connected" | "disconnected";
 type RealtimeStatus = "SUBSCRIBED" | "TIMED_OUT" | "CLOSED" | "CHANNEL_ERROR";
 
 export function GameRealtime({ gameId }: { gameId: string }) {
   const router = useRouter();
-  const refreshTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const actionPendingRef = useRef(false);
-  const refreshQueuedRef = useRef(false);
+  const [refreshPending, startRefresh] = useTransition();
+  const queueRef = useRef<ReturnType<typeof createRealtimeRefreshQueue> | null>(null);
+
+  useEffect(() => {
+    if (!refreshPending) queueRef.current?.complete();
+  }, [refreshPending]);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
 
   useEffect(() => {
@@ -20,29 +25,14 @@ export function GameRealtime({ gameId }: { gameId: string }) {
     let active = true;
     let channel: ReturnType<typeof supabase.channel> | undefined;
 
-    const scheduleRefresh = () => {
-      if (refreshTimer.current) clearTimeout(refreshTimer.current);
-      refreshTimer.current = setTimeout(() => {
-        startTransition(() => router.refresh());
-      }, 80);
-    };
-
-    const refreshGame = () => {
-      if (actionPendingRef.current) {
-        refreshQueuedRef.current = true;
-        return;
-      }
-      scheduleRefresh();
-    };
+    const queue = createRealtimeRefreshQueue(() => startRefresh(() => router.refresh()));
+    queueRef.current = queue;
+    const refreshGame = () => queue.request();
 
     const handleActionPending = (event: Event) => {
       if (!(event instanceof CustomEvent)) return;
       const detail = event.detail as { pending?: unknown };
-      actionPendingRef.current = detail.pending === true;
-      if (!actionPendingRef.current && refreshQueuedRef.current) {
-        refreshQueuedRef.current = false;
-        scheduleRefresh();
-      }
+      queue.setActionPending(detail.pending === true);
     };
 
     window.addEventListener(GAME_ACTION_PENDING_EVENT, handleActionPending);
@@ -71,14 +61,17 @@ export function GameRealtime({ gameId }: { gameId: string }) {
         });
     };
 
-    void subscribe();
+    void subscribe().catch(() => {
+      if (active) setConnection("disconnected");
+    });
     return () => {
       active = false;
       window.removeEventListener(GAME_ACTION_PENDING_EVENT, handleActionPending);
-      if (refreshTimer.current) clearTimeout(refreshTimer.current);
+      queue.dispose();
+      if (queueRef.current === queue) queueRef.current = null;
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [gameId, router]);
+  }, [gameId, router, startRefresh]);
 
   return (
     <span
