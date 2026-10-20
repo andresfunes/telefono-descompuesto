@@ -38,3 +38,37 @@ describe("duration UI", () => {
     expect(html).toMatch(/Ronda 1 de 4/);
   });
 });
+
+
+describe("duration options for small groups", () => {
+  it.each([2, 3, 4])("hides the selector with %i players while retaining a rematch preference", (count) => {
+    const game = fixture();
+    game.players = game.players.slice(0, count);
+    for (const currentPlayer of game.players.slice(0, 2)) {
+      const html = renderToStaticMarkup(<LobbyScreen game={game} currentPlayer={currentPlayer} />);
+      expect(html).not.toContain('name="roundLimit"');
+      expect(html).toContain("Duración: Partida completa");
+      expect(html).toContain(`Con este grupo: ${count} rondas`);
+      expect(html).toContain("desde 5 jugadores");
+    }
+    expect(game.roundLimit).toBe(4);
+  });
+
+  it.each([5, 6, 7])("offers only shorter options with %i players", (count) => {
+    const game = fixture();
+    game.players = game.players.slice(0, count);
+    game.roundLimit = 6;
+    const html = renderToStaticMarkup(<LobbyScreen game={game} currentPlayer={game.players[0]} />);
+    const sixRoundButton = html.match(/<button[^>]*value="6"[^>]*>/)?.[0];
+    expect(sixRoundButton).toBeDefined();
+    if (count <= 6) {
+      expect(sixRoundButton).toContain('disabled=""');
+      expect(html).toContain('value="full" aria-pressed="true"');
+      expect(html).toContain(`Con este grupo: ${count} rondas`);
+    } else {
+      expect(sixRoundButton).not.toContain('disabled=""');
+      expect(sixRoundButton).toContain('aria-pressed="true"');
+      expect(html).toContain("Con este grupo: 6 rondas");
+    }
+  });
+});

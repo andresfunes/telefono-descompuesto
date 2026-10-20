@@ -136,7 +136,9 @@ Los clientes reciben `GAME_CHANGED` por un Broadcast privado `game:<uuid>`. El e
 
 El anfitrión elige en el lobby entre **Partida completa**, **Rápida · 4 rondas** y
 **Rápida · 6 rondas**. La selección se guarda al tocar la opción y se sincroniza para
-todos. La completa dura una ronda por jugador; las rápidas duran `min(límite, N)`
+todos. El selector aparece desde 5 jugadores; la rápida de 6 rondas se habilita
+desde 7. Si el grupo se achica, se muestra la duración efectiva y se conserva la
+preferencia para cuando vuelvan a sumarse jugadores. La completa dura una ronda por jugador; las rápidas duran `min(límite, N)`
 rondas para no repetir autores en una misma cadena. Con ocho jugadores, la rápida
 de cuatro rondas tiene dos turnos de texto y dos de dibujo por persona.
 

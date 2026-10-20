@@ -13,6 +13,10 @@ export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer
   const isHost = game.hostPlayerId === currentPlayer.id;
   const hasMinimumPlayers = game.players.length >= MINIMUM_PLAYER_COUNT;
   const lobbyExpired = isLobbyExpired(game);
+  const canShortenGame = game.players.length > 4;
+  const effectiveRoundLimit = totalGameRounds(game) < game.players.length
+    ? game.roundLimit ?? null
+    : null;
 
   return (
     <>
@@ -47,15 +51,20 @@ export function LobbyScreen({ game, currentPlayer }: { game: Game; currentPlayer
       </div>
 
       <section className="mb-6 rounded-2xl bg-[var(--cream)] p-4" aria-label="Duración">
-        {isHost && !lobbyExpired ? (
-          <RoundLimitForm roomCode={game.code} roundLimit={game.roundLimit ?? null} />
+        {isHost && !lobbyExpired && canShortenGame ? (
+          <RoundLimitForm roomCode={game.code} roundLimit={effectiveRoundLimit} playerCount={game.players.length} />
         ) : (
-          <p className="font-black">Duración: {game.roundLimit ? `Rápida · ${game.roundLimit} rondas` : "Partida completa"}</p>
+          <p className="font-black">Duración: {effectiveRoundLimit ? `Rápida · ${effectiveRoundLimit} rondas` : "Partida completa"}</p>
         )}
         <p className="mt-3 text-sm text-slate-600">
           {hasMinimumPlayers ? `Con este grupo: ${totalGameRounds(game)} rondas, alternando texto y dibujo.` : "El total se ajustará cuando se sumen los jugadores."}
-          {" "}Las partidas rápidas duran como máximo una ronda por jugador.
+          {!canShortenGame && " Podrás elegir una partida rápida desde 5 jugadores."}
         </p>
+        {game.roundLimit && effectiveRoundLimit === null && (
+          <p className="mt-2 text-xs text-slate-500">
+            Preferencia para grupos más grandes: rápida de {game.roundLimit} rondas.
+          </p>
+        )}
       </section>
 
       {lobbyExpired ? (

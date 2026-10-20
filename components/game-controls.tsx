@@ -302,7 +302,11 @@ export function TurnForm({
 }
 
 
-export function RoundLimitForm({ roomCode, roundLimit }: { roomCode: string; roundLimit: RoundLimit }) {
+export function RoundLimitForm({ roomCode, roundLimit, playerCount }: {
+  roomCode: string;
+  roundLimit: RoundLimit;
+  playerCount: number;
+}) {
   const [state, action, pending] = useActionState(setRoomRoundLimit, initialState);
   useEffect(() => {
     window.dispatchEvent(new CustomEvent(ROUND_LIMIT_PENDING_EVENT, { detail: { pending } }));
@@ -329,16 +333,17 @@ export function RoundLimitForm({ roomCode, roundLimit }: { roomCode: string; rou
               name="roundLimit"
               value={option.value}
               aria-pressed={roundLimit === option.limit}
+              disabled={option.limit !== null && playerCount <= option.limit}
               className={`min-h-16 rounded-2xl border-2 p-3 text-left disabled:opacity-60 ${roundLimit === option.limit ? "border-[var(--ink)] bg-[var(--mint)]" : "border-slate-200 bg-white"}`}
             >
               <span className="block text-sm font-black">{option.label}</span>
-              <span className="mt-1 block text-xs text-slate-600">{option.detail}</span>
+              <span className="mt-1 block text-xs text-slate-600">{option.limit !== null && playerCount <= option.limit ? `Disponible desde ${option.limit + 1} jugadores` : option.detail}</span>
             </button>
           ))}
         </div>
       </fieldset>
       <p aria-live="polite" className="text-sm text-slate-600">
-        {pending ? "Guardando duración…" : "La opción marcada está guardada para todos."}
+        {pending ? "Guardando duración…" : "La opción marcada se aplica al grupo actual."}
       </p>
       {state.error && <p role="alert" className="text-sm font-semibold text-red-700">{state.error}</p>}
     </form>
