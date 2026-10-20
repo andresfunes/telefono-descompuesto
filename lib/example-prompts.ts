@@ -1,5 +1,3 @@
-import { randomInt } from "node:crypto";
-
 export const EXAMPLE_PROMPTS = [
   "Un pingüino atendiendo una panadería",
   "Una abuela ganando una carrera de motos",
@@ -104,7 +102,12 @@ export const EXAMPLE_PROMPTS = [
 ] as const;
 
 export function randomExamplePrompt(
-  selectIndex: (maximum: number) => number = randomInt,
+  selectIndex: (maximum: number) => number = (maximum) => Math.floor(Math.random() * maximum),
 ): string {
   return EXAMPLE_PROMPTS[selectIndex(EXAMPLE_PROMPTS.length)] ?? EXAMPLE_PROMPTS[0];
+}
+
+export function nextExamplePrompt(current: string, selectIndex: (maximum: number) => number = (maximum) => Math.floor(Math.random() * maximum)): string {
+  const candidates = EXAMPLE_PROMPTS.filter((prompt) => prompt !== current);
+  return candidates[selectIndex(candidates.length)] ?? candidates[0];
 }

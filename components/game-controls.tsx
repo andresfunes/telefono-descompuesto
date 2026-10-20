@@ -1,5 +1,7 @@
 "use client";
 
+import { nextExamplePrompt } from "@/lib/example-prompts";
+
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import {
@@ -212,6 +214,7 @@ export function TurnForm({
     return result;
   }, [draftStorageKey]);
   const [state, action] = useActionState(submitAndClearDraft, initialState);
+  const [suggestedPrompt, setSuggestedPrompt] = useState(initialPromptExample ?? "");
   const [drawingError, setDrawingError] = useState<string>();
   const [textDraft, setTextDraft] = useState(() =>
     entryType === "text" ? readTurnDraft(draftStorageKey) ?? "" : "",
@@ -273,6 +276,15 @@ export function TurnForm({
               )}
             </div>
           )}
+          {roundNumber === 0 && (
+            <div className="space-y-2">
+              <button type="button" className="min-h-11 rounded-xl border-2 border-[var(--ink)] bg-white px-4 font-bold"
+                onClick={() => setSuggestedPrompt(nextExamplePrompt(suggestedPrompt))}>
+                🎲 Sugerir idea
+              </button>
+              <p className="text-sm text-slate-600" aria-live="polite">{suggestedPrompt}</p>
+            </div>
+          )}
           <label className="block text-sm font-bold" htmlFor="text-entry">
             {roundNumber === 0 ? "Tu frase original" : "¿Qué representa?"}
           </label>
@@ -283,7 +295,7 @@ export function TurnForm({
             maxLength={240}
             name="value"
             onChange={updateTextDraft}
-            placeholder={roundNumber === 0 ? `${initialPromptExample ?? ""}…` : undefined}
+            placeholder={roundNumber === 0 ? `${suggestedPrompt}…` : undefined}
             required
             value={textDraft}
           />
