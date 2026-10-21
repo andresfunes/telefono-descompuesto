@@ -8,9 +8,8 @@
   `navigator.vibrate?.(10)` al tocar herramientas, deshacer o rellenar con balde
   para dar una sensación táctil de aplicación nativa en navegadores compatibles.
   Implementado y validado con tests; pendiente de probar la vibración en un celular real.
-- [x] **Inspiración de consignas:** botón «🎲 Sugerir idea» en la ronda 0,
-  con las 100 frases existentes, sin repetir la sugerencia actual ni sobrescribir
-  el borrador del jugador.
+- **Descartado — botón de ideas:** retirado por decisión de producto. Se conserva
+  la frase de ejemplo en el campo de texto de la ronda inicial.
 - [x] **Optimización de refresco Realtime:** agrupa ráfagas durante 250 ms,
   evita refrescos simultáneos y conserva una actualización pendiente durante
   refrescos o acciones. Se mantiene el snapshot autoritativo del servidor;

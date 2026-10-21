@@ -106,8 +106,3 @@ export function randomExamplePrompt(
 ): string {
   return EXAMPLE_PROMPTS[selectIndex(EXAMPLE_PROMPTS.length)] ?? EXAMPLE_PROMPTS[0];
 }
-
-export function nextExamplePrompt(current: string, selectIndex: (maximum: number) => number = (maximum) => Math.floor(Math.random() * maximum)): string {
-  const candidates = EXAMPLE_PROMPTS.filter((prompt) => prompt !== current);
-  return candidates[selectIndex(candidates.length)] ?? candidates[0];
-}

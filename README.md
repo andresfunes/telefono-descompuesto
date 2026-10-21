@@ -10,7 +10,7 @@ El flujo clásico permite:
 - invitar mediante QR, WhatsApp o un enlace copiable;
 - bloquear el lobby, expulsar intrusos antes de empezar y saltear jugadores ausentes durante la partida, conservando el orden original de las cadenas;
 - jugar rondas alternadas de texto y dibujo;
-- sugerir ideas entre 100 frases visuales en la ronda inicial, sin sobrescribir el borrador;
+- mostrar una de 100 frases visuales aleatorias como ejemplo en el campo de texto inicial;
 - dibujar con lápiz, goma, relleno, 12 colores, siete grosores y deshacer/rehacer;
 - ampliar el lienzo 2× y desplazar la vista para dibujar detalles en celulares;
 - usar controles de dibujo grandes y táctiles, ver el tamaño del lápiz o borrador
